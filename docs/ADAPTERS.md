@@ -18,7 +18,7 @@ The adapter layer bridges `claude-agent-sdk-go` to Bubble Tea's message-passing 
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
 │  │  stream.go   │  │  control.go  │  │  client.go   │       │
 │  │              │  │              │  │              │       │
-│  │ StreamCmd()  │  │ HookAdapter  │  │ ClientCmd()  │       │
+│  │ StreamCmd()  │  │ canUseTool   │  │ ClientCmd()  │       │
 │  │ adaptMsg()   │  │ ToolAdapter  │  │ Lifecycle    │       │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
 │         │                 │                 │                │
@@ -28,18 +28,20 @@ The adapter layer bridges `claude-agent-sdk-go` to Bubble Tea's message-passing 
 ┌─────────────────────────────────────────────────────────────┐
 │                   claude-agent-sdk-go                        │
 │                                                              │
-│  ReceiveMessages()    Hooks/Callbacks      Client API       │
-│  StreamEvent          PreToolUse           Connect()        │
-│  AssistantMessage     PostToolUse          Query()          │
-│  ResultMessage        etc.                 Disconnect()     │
+│  ReceiveMessages()    canUseTool()        Client API        │
+│  StreamEvent          ToolUseRequest      Connect()         │
+│  AssistantMessage     ToolResult          Query()           │
+│  ResultMessage        Callbacks           Disconnect()      │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## stream.go - Message Stream Adapter
 
 Converts SDK streaming messages to Bubble Tea messages.
 
-### Types
+### Output Message Types
 
 ```go
 package adapter
@@ -49,17 +51,19 @@ import (
     claudecode "github.com/severity1/claude-agent-sdk-go"
 )
 
-// Output messages (emitted to Bubble Tea)
-
 // StreamDeltaMsg contains incremental text from streaming
 type StreamDeltaMsg struct {
-    Text string
+    Text      string
+    BlockType string  // "text", "thinking", "tool_use"
+    Index     int
 }
 
 // StreamBlockStartMsg signals a new content block
 type StreamBlockStartMsg struct {
-    BlockType string
+    BlockType string  // "text", "thinking", "tool_use"
     Index     int
+    ToolName  string  // Only for tool_use blocks
+    ToolID    string  // Only for tool_use blocks
 }
 
 // StreamBlockStopMsg signals content block completion
@@ -72,9 +76,12 @@ type AssistantMsg struct {
     Message *claudecode.AssistantMessage
 }
 
-// ResultMsg contains the final result
+// ResultMsg contains the final result with usage stats
 type ResultMsg struct {
-    Message *claudecode.ResultMessage
+    Message      *claudecode.ResultMessage
+    InputTokens  int
+    OutputTokens int
+    TotalCost    float64
 }
 
 // StreamDoneMsg signals stream completion
@@ -84,9 +91,23 @@ type StreamDoneMsg struct{}
 type StreamErrorMsg struct {
     Err error
 }
+
+// ThinkingDeltaMsg contains incremental thinking text
+type ThinkingDeltaMsg struct {
+    Text  string
+    Index int
+}
+
+// ToolUseDeltaMsg contains incremental tool input JSON
+type ToolUseDeltaMsg struct {
+    PartialJSON string
+    ToolName    string
+    ToolID      string
+    Index       int
+}
 ```
 
-### Functions
+### Stream Command
 
 ```go
 // StreamCmd returns a tea.Cmd that reads from SDK message channel.
@@ -113,42 +134,86 @@ func adaptMessage(msg claudecode.Message) tea.Msg {
     case *claudecode.AssistantMessage:
         return AssistantMsg{Message: m}
     case *claudecode.ResultMessage:
-        return ResultMsg{Message: m}
+        return ResultMsg{
+            Message:      m,
+            InputTokens:  m.Usage.InputTokens,
+            OutputTokens: m.Usage.OutputTokens,
+            TotalCost:    m.CalculateCost(),
+        }
     default:
         return nil
     }
 }
 
-// adaptStreamEvent extracts delta text from StreamEvent
+// adaptStreamEvent extracts typed content from StreamEvent
 func adaptStreamEvent(event *claudecode.StreamEvent) tea.Msg {
     eventType, _ := event.Event["type"].(string)
 
     switch eventType {
-    case claudecode.StreamEventTypeContentBlockStart:
-        blockType := ""
-        if cb, ok := event.Event["content_block"].(map[string]any); ok {
-            blockType, _ = cb["type"].(string)
-        }
-        index, _ := event.Event["index"].(float64)
-        return StreamBlockStartMsg{
-            BlockType: blockType,
-            Index:     int(index),
-        }
+    case "content_block_start":
+        return adaptBlockStart(event)
 
-    case claudecode.StreamEventTypeContentBlockDelta:
-        if delta, ok := event.Event["delta"].(map[string]any); ok {
-            if text, ok := delta["text"].(string); ok {
-                return StreamDeltaMsg{Text: text}
-            }
-        }
-        return nil
+    case "content_block_delta":
+        return adaptBlockDelta(event)
 
-    case claudecode.StreamEventTypeContentBlockStop:
+    case "content_block_stop":
         index, _ := event.Event["index"].(float64)
         return StreamBlockStopMsg{Index: int(index)}
 
-    case claudecode.StreamEventTypeMessageStop:
+    case "message_stop":
         return StreamDoneMsg{}
+
+    default:
+        return nil
+    }
+}
+
+func adaptBlockStart(event *claudecode.StreamEvent) tea.Msg {
+    index, _ := event.Event["index"].(float64)
+    cb, _ := event.Event["content_block"].(map[string]any)
+    blockType, _ := cb["type"].(string)
+
+    msg := StreamBlockStartMsg{
+        BlockType: blockType,
+        Index:     int(index),
+    }
+
+    // Extract tool info for tool_use blocks
+    if blockType == "tool_use" {
+        msg.ToolName, _ = cb["name"].(string)
+        msg.ToolID, _ = cb["id"].(string)
+    }
+
+    return msg
+}
+
+func adaptBlockDelta(event *claudecode.StreamEvent) tea.Msg {
+    index, _ := event.Event["index"].(float64)
+    delta, _ := event.Event["delta"].(map[string]any)
+    deltaType, _ := delta["type"].(string)
+
+    switch deltaType {
+    case "text_delta":
+        text, _ := delta["text"].(string)
+        return StreamDeltaMsg{
+            Text:      text,
+            BlockType: "text",
+            Index:     int(index),
+        }
+
+    case "thinking_delta":
+        text, _ := delta["thinking"].(string)
+        return ThinkingDeltaMsg{
+            Text:  text,
+            Index: int(index),
+        }
+
+    case "input_json_delta":
+        partialJSON, _ := delta["partial_json"].(string)
+        return ToolUseDeltaMsg{
+            PartialJSON: partialJSON,
+            Index:       int(index),
+        }
 
     default:
         return nil
@@ -162,29 +227,34 @@ func adaptStreamEvent(event *claudecode.StreamEvent) tea.Msg {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
     case adapter.StreamDeltaMsg:
-        // Append to streaming text component
-        m.streamText, cmd = m.streamText.Update(streamtext.DeltaMsg{Text: msg.Text})
-        // Continue reading stream
-        return m, tea.Batch(cmd, adapter.StreamCmd(m.ctx, m.msgChan))
+        // Route to appropriate component based on block type
+        m.streamText.AppendText(msg.Text)
+        return m, adapter.StreamCmd(m.ctx, m.msgChan)
 
-    case adapter.AssistantMsg:
-        // Add complete message to history
-        m.messages = append(m.messages, message.FromAssistantMessage(msg.Message))
+    case adapter.ThinkingDeltaMsg:
+        m.thinking.AppendText(msg.Text)
+        return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+    case adapter.ToolUseDeltaMsg:
+        m.toolUse.AppendJSON(msg.PartialJSON)
+        return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+    case adapter.StreamBlockStartMsg:
+        switch msg.BlockType {
+        case "thinking":
+            m.thinking.Start()
+        case "tool_use":
+            m.toolUse.Start(msg.ToolName, msg.ToolID)
+        }
         return m, adapter.StreamCmd(m.ctx, m.msgChan)
 
     case adapter.ResultMsg:
-        // Update status bar, streaming complete
-        m.status = status.FromResultMessage(msg.Message)
-        m.streaming = false
-        return m, nil
-
-    case adapter.StreamDoneMsg:
+        m.status.Update(msg.InputTokens, msg.OutputTokens, msg.TotalCost)
         m.streaming = false
         return m, nil
 
     case adapter.StreamErrorMsg:
-        m.err = msg.Err
-        return m, nil
+        return m, m.toast.Show(toast.Error, "Stream Error", msg.Err.Error())
     }
     return m, nil
 }
@@ -192,30 +262,51 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 ---
 
-## control.go - Control Event Adapter
+## control.go - Tool Control Adapter
 
-Converts SDK hooks and tool calls to input prompt messages.
+The `canUseTool` callback is the primary mechanism for tool permission handling in the SDK. It intercepts tool execution requests and allows the TUI to prompt the user.
 
-### Types
+### Tool Request Types
 
 ```go
 package adapter
 
-// ShowPermissionPromptMsg triggers permission input component
-type ShowPermissionPromptMsg struct {
+// ToolUseRequest represents an intercepted tool execution
+type ToolUseRequest struct {
     ToolName  string
     ToolInput map[string]any
     ToolUseID string
-    Respond   func(decision string, alwaysAllow bool)
+}
+
+// ToolDecision represents the user's response
+type ToolDecision struct {
+    Allow       bool
+    AlwaysAllow bool
+    Reason      string
+}
+```
+
+### TUI Message Types
+
+```go
+// ShowPermissionPromptMsg triggers permission input component
+type ShowPermissionPromptMsg struct {
+    Request   ToolUseRequest
+    Respond   func(decision ToolDecision)
 }
 
 // ShowQuestionPromptMsg triggers question input component
 type ShowQuestionPromptMsg struct {
+    ToolUseID   string
+    Questions   []Question
+    Respond     func(answers map[string]any)
+}
+
+type Question struct {
     Question    string
     Header      string
     Options     []QuestionOption
     MultiSelect bool
-    Respond     func(selections []string, customText string)
 }
 
 type QuestionOption struct {
@@ -225,166 +316,391 @@ type QuestionOption struct {
 
 // ShowPlanEnterPromptMsg triggers plan entry confirmation
 type ShowPlanEnterPromptMsg struct {
-    Message string
-    Respond func(confirmed bool)
+    ToolUseID string
+    Respond   func(confirmed bool)
 }
 
 // ShowPlanExitPromptMsg triggers plan review component
 type ShowPlanExitPromptMsg struct {
-    PlanContent string
+    ToolUseID   string
+    PlanFile    string
     Permissions []RequestedPermission
-    Respond     func(action string, feedback string, approvedPerms []string)
+    Respond     func(action PlanAction, feedback string, approvedPerms []string)
 }
 
 type RequestedPermission struct {
     Tool   string
     Prompt string
 }
+
+type PlanAction int
+
+const (
+    PlanApprove PlanAction = iota
+    PlanReject
+    PlanRequestChanges
+)
+
+// ShowTodoUpdateMsg notifies of TodoWrite tool updates
+type ShowTodoUpdateMsg struct {
+    ToolUseID string
+    Todos     []TodoItem
+}
+
+type TodoItem struct {
+    Content    string
+    Status     string  // "pending", "in_progress", "completed"
+    ActiveForm string
+}
+
+// Background Task Messages
+
+// TaskStartedMsg signals a new background task has started
+type TaskStartedMsg struct {
+    TaskID      string
+    Type        string       // "bash" or "agent"
+    Description string
+    OutputFile  string       // Path to output file for incremental reading
+}
+
+// TaskProgressMsg contains incremental output from a background task
+type TaskProgressMsg struct {
+    TaskID string
+    Output string
+}
+
+// TaskCompletedMsg signals a background task has finished
+type TaskCompletedMsg struct {
+    TaskID   string
+    Status   string    // "completed", "failed", "killed"
+    Output   string
+    ExitCode *int      // nil if killed or agent type
+}
+
+// ShowTaskManagerMsg triggers the task manager panel
+type ShowTaskManagerMsg struct {
+    Tasks []BackgroundTask
+}
+
+type BackgroundTask struct {
+    ID          string
+    Type        string       // "bash" or "agent"
+    Description string
+    Status      string       // "running", "completed", "failed", "killed"
+    StartedAt   time.Time
+    Output      string
+    OutputFile  string
+    ExitCode    *int
+}
+
+// TaskOutputRequestMsg triggers a task output fetch
+type ShowTaskOutputRequestMsg struct {
+    ToolUseID string
+    TaskID    string
+    Block     bool
+    Timeout   int
+    Respond   func(output string, done bool)
+}
+
+// KillShellRequestMsg triggers kill confirmation
+type ShowKillShellRequestMsg struct {
+    ToolUseID string
+    ShellID   string
+    Respond   func(confirmed bool)
+}
+
+// Skill Messages
+
+// ShowSkillInvokeMsg signals a skill is being invoked
+type ShowSkillInvokeMsg struct {
+    ToolUseID string
+    SkillName string
+    Args      string
+}
+
+// Session Messages
+
+// ShowSessionPickerMsg triggers the session picker
+type ShowSessionPickerMsg struct {
+    Sessions []SessionInfo
+    Current  string
+    Respond  func(action SessionAction, sessionID string)
+}
+
+type SessionInfo struct {
+    ID           string
+    CreatedAt    time.Time
+    UpdatedAt    time.Time
+    MessageCount int
+    TokensUsed   int
+    Model        string
+    Summary      string
+    IsActive     bool
+}
+
+type SessionAction int
+
+const (
+    SessionActionSelect SessionAction = iota
+    SessionActionResume
+    SessionActionDelete
+    SessionActionExport
+)
+
+// SessionSelectedMsg signals a session selection
+type SessionSelectedMsg struct {
+    SessionID string
+    Action    SessionAction
+}
+
+// SessionResumedMsg signals a session has been resumed
+type SessionResumedMsg struct {
+    SessionID string
+}
+
+// Search Messages
+
+// ShowSearchMsg triggers the search overlay
+type ShowSearchMsg struct {
+    Respond func(result SearchResult)
+}
+
+// SearchResultsMsg contains search results
+type SearchResultsMsg struct {
+    Query   string
+    Results []SearchResult
+}
+
+type SearchResult struct {
+    MessageIndex int
+    Role         string
+    Snippet      string
+    Highlights   []HighlightRange
+    Timestamp    time.Time
+}
+
+type HighlightRange struct {
+    Start int
+    End   int
+}
 ```
 
-### Hook Adapter
+### canUseTool Callback Adapter
+
+The `canUseTool` callback provides fine-grained control over tool execution.
+
+**Critical:** The callback runs in the SDK's goroutine, not the Bubble Tea goroutine.
+This requires careful handling of:
+1. Context cancellation - user closes app while waiting
+2. Program shutdown - `tea.Program` may be nil or closed
+3. Deadlock prevention - `program.Send()` might block if program is busy
 
 ```go
-// HookAdapter wraps SDK hooks to emit TUI messages
-type HookAdapter struct {
-    program *tea.Program
+// ToolControlAdapter creates canUseTool callback for SDK
+type ToolControlAdapter struct {
+    program      *tea.Program
+    autoApproved map[string]bool  // Tools auto-approved by user
+    shutdown     chan struct{}    // Signals shutdown in progress
+    mu           sync.Mutex
 }
 
-func NewHookAdapter(p *tea.Program) *HookAdapter {
-    return &HookAdapter{program: p}
+func NewToolControlAdapter(p *tea.Program) *ToolControlAdapter {
+    return &ToolControlAdapter{
+        program:      p,
+        autoApproved: make(map[string]bool),
+        shutdown:     make(chan struct{}),
+    }
 }
 
-// PreToolUseHook returns an SDK hook that emits ShowPermissionPromptMsg
-func (h *HookAdapter) PreToolUseHook() claudecode.Option {
-    return claudecode.WithPreToolUseHook("", func(
+// Shutdown signals all pending callbacks to abort
+// Call this before tea.Program.Quit() to prevent deadlocks
+func (t *ToolControlAdapter) Shutdown() {
+    close(t.shutdown)
+}
+
+// CanUseTool returns the callback function for SDK configuration
+func (t *ToolControlAdapter) CanUseTool() claudecode.CanUseToolFunc {
+    return func(
         ctx context.Context,
-        input any,
-        toolUseID *string,
-        hookCtx claudecode.HookContext,
-    ) (claudecode.HookJSONOutput, error) {
-        preInput, ok := input.(*claudecode.PreToolUseHookInput)
-        if !ok {
-            return claudecode.HookJSONOutput{}, nil
+        toolName string,
+        toolInput map[string]any,
+        toolUseID string,
+    ) (bool, error) {
+        // Handle special tools that need UI interaction
+        switch toolName {
+        case "AskUserQuestion":
+            return t.handleAskUserQuestion(ctx, toolInput, toolUseID)
+
+        case "EnterPlanMode":
+            return t.handleEnterPlanMode(ctx, toolUseID)
+
+        case "ExitPlanMode":
+            return t.handleExitPlanMode(ctx, toolInput, toolUseID)
+
+        case "TodoWrite":
+            return t.handleTodoWrite(ctx, toolInput, toolUseID)
+
+        case "TaskOutput":
+            return t.handleTaskOutput(ctx, toolInput, toolUseID)
+
+        case "KillShell":
+            return t.handleKillShell(ctx, toolInput, toolUseID)
+
+        case "Skill":
+            return t.handleSkill(ctx, toolInput, toolUseID)
         }
 
-        // Create response channel
-        resultCh := make(chan struct {
-            decision    string
-            alwaysAllow bool
-        }, 1)
+        // Check if tool is auto-approved
+        t.mu.Lock()
+        if t.autoApproved[toolName] {
+            t.mu.Unlock()
+            return true, nil
+        }
+        t.mu.Unlock()
 
-        // Send message to TUI
-        h.program.Send(ShowPermissionPromptMsg{
-            ToolName:  preInput.ToolName,
-            ToolInput: preInput.ToolInput,
-            ToolUseID: *toolUseID,
-            Respond: func(decision string, alwaysAllow bool) {
-                resultCh <- struct {
-                    decision    string
-                    alwaysAllow bool
-                }{decision, alwaysAllow}
-            },
-        })
+        // Show permission prompt for other tools
+        return t.showPermissionPrompt(ctx, toolName, toolInput, toolUseID)
+    }
+}
 
-        // Wait for user response
-        select {
-        case result := <-resultCh:
-            if result.decision == "deny" {
-                decision := "block"
-                reason := "User denied tool execution"
-                return claudecode.HookJSONOutput{
-                    Decision: &decision,
-                    Reason:   &reason,
-                }, nil
+// showPermissionPrompt displays permission UI and waits for response
+func (t *ToolControlAdapter) showPermissionPrompt(
+    ctx context.Context,
+    toolName string,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    // Check for shutdown before sending
+    select {
+    case <-t.shutdown:
+        return false, fmt.Errorf("adapter shutdown")
+    default:
+    }
+
+    resultCh := make(chan ToolDecision, 1)
+
+    // Non-blocking send to prevent deadlock if program is busy
+    // The buffered channel in tea.Program handles this, but be defensive
+    t.program.Send(ShowPermissionPromptMsg{
+        Request: ToolUseRequest{
+            ToolName:  toolName,
+            ToolInput: toolInput,
+            ToolUseID: toolUseID,
+        },
+        Respond: func(decision ToolDecision) {
+            // Respond callback may be called after shutdown
+            select {
+            case resultCh <- decision:
+            default:
+                // Channel closed or full, ignore
             }
-            return claudecode.HookJSONOutput{}, nil
-        case <-ctx.Done():
-            return claudecode.HookJSONOutput{}, ctx.Err()
-        }
+        },
     })
+
+    select {
+    case decision := <-resultCh:
+        if decision.AlwaysAllow {
+            t.mu.Lock()
+            t.autoApproved[toolName] = true
+            t.mu.Unlock()
+        }
+        return decision.Allow, nil
+    case <-ctx.Done():
+        return false, ctx.Err()
+    case <-t.shutdown:
+        return false, fmt.Errorf("adapter shutdown")
+    }
 }
 ```
 
-### Tool Call Adapter
-
-Detects special tool calls (AskUserQuestion, EnterPlanMode, ExitPlanMode) and converts them to TUI messages.
+### Special Tool Handlers
 
 ```go
-// ToolCallAdapter monitors AssistantMessages for special tools
-type ToolCallAdapter struct {
-    program *tea.Program
-}
-
-func NewToolCallAdapter(p *tea.Program) *ToolCallAdapter {
-    return &ToolCallAdapter{program: p}
-}
-
-// ProcessMessage checks for special tool calls
-func (t *ToolCallAdapter) ProcessMessage(msg *claudecode.AssistantMessage) {
-    for _, block := range msg.Content {
-        toolUse, ok := block.(*claudecode.ToolUseBlock)
-        if !ok {
-            continue
-        }
-
-        switch toolUse.Name {
-        case "AskUserQuestion":
-            t.handleAskUserQuestion(toolUse)
-        case "EnterPlanMode":
-            t.handleEnterPlanMode(toolUse)
-        case "ExitPlanMode":
-            t.handleExitPlanMode(toolUse)
-        }
-    }
-}
-
-func (t *ToolCallAdapter) handleAskUserQuestion(toolUse *claudecode.ToolUseBlock) {
-    // Parse tool input
-    questions, _ := toolUse.Input["questions"].([]any)
-    if len(questions) == 0 {
-        return
+// handleAskUserQuestion shows question UI
+func (t *ToolControlAdapter) handleAskUserQuestion(
+    ctx context.Context,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    questionsRaw, _ := toolInput["questions"].([]any)
+    if len(questionsRaw) == 0 {
+        return true, nil
     }
 
-    q := questions[0].(map[string]any)
-    question, _ := q["question"].(string)
-    header, _ := q["header"].(string)
-    multiSelect, _ := q["multiSelect"].(bool)
-
-    var options []QuestionOption
-    if opts, ok := q["options"].([]any); ok {
-        for _, opt := range opts {
-            o := opt.(map[string]any)
-            options = append(options, QuestionOption{
-                Label:       o["label"].(string),
-                Description: o["description"].(string),
-            })
+    questions := make([]Question, 0, len(questionsRaw))
+    for _, q := range questionsRaw {
+        qMap := q.(map[string]any)
+        question := Question{
+            Question:    qMap["question"].(string),
+            Header:      qMap["header"].(string),
+            MultiSelect: qMap["multiSelect"].(bool),
         }
+
+        if opts, ok := qMap["options"].([]any); ok {
+            for _, opt := range opts {
+                optMap := opt.(map[string]any)
+                question.Options = append(question.Options, QuestionOption{
+                    Label:       optMap["label"].(string),
+                    Description: optMap["description"].(string),
+                })
+            }
+        }
+        questions = append(questions, question)
     }
+
+    resultCh := make(chan map[string]any, 1)
 
     t.program.Send(ShowQuestionPromptMsg{
-        Question:    question,
-        Header:      header,
-        Options:     options,
-        MultiSelect: multiSelect,
-        Respond: func(selections []string, customText string) {
-            // Response handling would connect back to SDK
+        ToolUseID: toolUseID,
+        Questions: questions,
+        Respond: func(answers map[string]any) {
+            resultCh <- answers
         },
     })
+
+    select {
+    case <-resultCh:
+        // Answers are handled by the SDK through tool result
+        return true, nil
+    case <-ctx.Done():
+        return false, ctx.Err()
+    }
 }
 
-func (t *ToolCallAdapter) handleEnterPlanMode(toolUse *claudecode.ToolUseBlock) {
+// handleEnterPlanMode shows plan entry confirmation
+func (t *ToolControlAdapter) handleEnterPlanMode(
+    ctx context.Context,
+    toolUseID string,
+) (bool, error) {
+    resultCh := make(chan bool, 1)
+
     t.program.Send(ShowPlanEnterPromptMsg{
-        Message: "Claude wants to plan the implementation before proceeding.",
+        ToolUseID: toolUseID,
         Respond: func(confirmed bool) {
-            // Response handling
+            resultCh <- confirmed
         },
     })
+
+    select {
+    case confirmed := <-resultCh:
+        return confirmed, nil
+    case <-ctx.Done():
+        return false, ctx.Err()
+    }
 }
 
-func (t *ToolCallAdapter) handleExitPlanMode(toolUse *claudecode.ToolUseBlock) {
-    // Parse plan content and permissions from tool input
+// handleExitPlanMode shows plan review UI
+func (t *ToolControlAdapter) handleExitPlanMode(
+    ctx context.Context,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    // Extract plan file path
+    planFile, _ := toolInput["planFile"].(string)
+
+    // Extract requested permissions
     var permissions []RequestedPermission
-    if perms, ok := toolUse.Input["allowedPrompts"].([]any); ok {
+    if perms, ok := toolInput["allowedPrompts"].([]any); ok {
         for _, p := range perms {
             perm := p.(map[string]any)
             permissions = append(permissions, RequestedPermission{
@@ -394,13 +710,290 @@ func (t *ToolCallAdapter) handleExitPlanMode(toolUse *claudecode.ToolUseBlock) {
         }
     }
 
+    resultCh := make(chan struct {
+        action        PlanAction
+        feedback      string
+        approvedPerms []string
+    }, 1)
+
     t.program.Send(ShowPlanExitPromptMsg{
-        PlanContent: "Plan content from file...", // Would read from plan file
+        ToolUseID:   toolUseID,
+        PlanFile:    planFile,
         Permissions: permissions,
-        Respond: func(action string, feedback string, approvedPerms []string) {
-            // Response handling
+        Respond: func(action PlanAction, feedback string, approvedPerms []string) {
+            resultCh <- struct {
+                action        PlanAction
+                feedback      string
+                approvedPerms []string
+            }{action, feedback, approvedPerms}
         },
     })
+
+    select {
+    case result := <-resultCh:
+        return result.action == PlanApprove, nil
+    case <-ctx.Done():
+        return false, ctx.Err()
+    }
+}
+
+// handleTodoWrite updates todo display (always allowed)
+func (t *ToolControlAdapter) handleTodoWrite(
+    ctx context.Context,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    todosRaw, _ := toolInput["todos"].([]any)
+    todos := make([]TodoItem, 0, len(todosRaw))
+
+    for _, todo := range todosRaw {
+        todoMap := todo.(map[string]any)
+        todos = append(todos, TodoItem{
+            Content:    todoMap["content"].(string),
+            Status:     todoMap["status"].(string),
+            ActiveForm: todoMap["activeForm"].(string),
+        })
+    }
+
+    // Send update to UI (non-blocking)
+    t.program.Send(ShowTodoUpdateMsg{
+        ToolUseID: toolUseID,
+        Todos:     todos,
+    })
+
+    // TodoWrite is always allowed
+    return true, nil
+}
+
+// handleTaskOutput retrieves output from background task
+func (t *ToolControlAdapter) handleTaskOutput(
+    ctx context.Context,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    taskID, _ := toolInput["task_id"].(string)
+    block, _ := toolInput["block"].(bool)
+    timeout := 30000 // default
+    if to, ok := toolInput["timeout"].(float64); ok {
+        timeout = int(to)
+    }
+
+    resultCh := make(chan struct {
+        output string
+        done   bool
+    }, 1)
+
+    t.program.Send(ShowTaskOutputRequestMsg{
+        ToolUseID: toolUseID,
+        TaskID:    taskID,
+        Block:     block,
+        Timeout:   timeout,
+        Respond: func(output string, done bool) {
+            resultCh <- struct {
+                output string
+                done   bool
+            }{output, done}
+        },
+    })
+
+    select {
+    case <-resultCh:
+        // Output retrieved successfully
+        return true, nil
+    case <-ctx.Done():
+        return false, ctx.Err()
+    }
+}
+
+// handleKillShell shows kill confirmation before terminating shell
+func (t *ToolControlAdapter) handleKillShell(
+    ctx context.Context,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    shellID, _ := toolInput["shell_id"].(string)
+
+    resultCh := make(chan bool, 1)
+
+    t.program.Send(ShowKillShellRequestMsg{
+        ToolUseID: toolUseID,
+        ShellID:   shellID,
+        Respond: func(confirmed bool) {
+            resultCh <- confirmed
+        },
+    })
+
+    select {
+    case confirmed := <-resultCh:
+        return confirmed, nil
+    case <-ctx.Done():
+        return false, ctx.Err()
+    }
+}
+
+// handleSkill notifies UI of skill invocation (always allowed)
+func (t *ToolControlAdapter) handleSkill(
+    ctx context.Context,
+    toolInput map[string]any,
+    toolUseID string,
+) (bool, error) {
+    skillName, _ := toolInput["skill"].(string)
+    args, _ := toolInput["args"].(string)
+
+    // Notify UI of skill invocation (non-blocking)
+    t.program.Send(ShowSkillInvokeMsg{
+        ToolUseID: toolUseID,
+        SkillName: skillName,
+        Args:      args,
+    })
+
+    // Skill invocations are always allowed
+    return true, nil
+}
+```
+
+### Tool-Specific Input Parsing
+
+Helper functions for parsing tool inputs by tool type.
+
+```go
+// ParseBashInput extracts Bash tool parameters
+func ParseBashInput(input map[string]any) (command, description string, timeout int) {
+    command, _ = input["command"].(string)
+    description, _ = input["description"].(string)
+    if t, ok := input["timeout"].(float64); ok {
+        timeout = int(t)
+    }
+    return
+}
+
+// ParseWriteInput extracts Write tool parameters
+func ParseWriteInput(input map[string]any) (filePath, content string) {
+    filePath, _ = input["file_path"].(string)
+    content, _ = input["content"].(string)
+    return
+}
+
+// ParseEditInput extracts Edit tool parameters
+func ParseEditInput(input map[string]any) (filePath, oldString, newString string, replaceAll bool) {
+    filePath, _ = input["file_path"].(string)
+    oldString, _ = input["old_string"].(string)
+    newString, _ = input["new_string"].(string)
+    replaceAll, _ = input["replace_all"].(bool)
+    return
+}
+
+// ParseReadInput extracts Read tool parameters
+func ParseReadInput(input map[string]any) (filePath string, offset, limit int) {
+    filePath, _ = input["file_path"].(string)
+    if o, ok := input["offset"].(float64); ok {
+        offset = int(o)
+    }
+    if l, ok := input["limit"].(float64); ok {
+        limit = int(l)
+    }
+    return
+}
+
+// ParseGlobInput extracts Glob tool parameters
+func ParseGlobInput(input map[string]any) (pattern, path string) {
+    pattern, _ = input["pattern"].(string)
+    path, _ = input["path"].(string)
+    return
+}
+
+// ParseGrepInput extracts Grep tool parameters
+func ParseGrepInput(input map[string]any) (pattern, path, glob, outputMode string) {
+    pattern, _ = input["pattern"].(string)
+    path, _ = input["path"].(string)
+    glob, _ = input["glob"].(string)
+    outputMode, _ = input["output_mode"].(string)
+    return
+}
+
+// ParseWebFetchInput extracts WebFetch tool parameters
+func ParseWebFetchInput(input map[string]any) (url, prompt string) {
+    url, _ = input["url"].(string)
+    prompt, _ = input["prompt"].(string)
+    return
+}
+
+// ParseWebSearchInput extracts WebSearch tool parameters
+func ParseWebSearchInput(input map[string]any) (query string, allowedDomains, blockedDomains []string) {
+    query, _ = input["query"].(string)
+    if domains, ok := input["allowed_domains"].([]any); ok {
+        for _, d := range domains {
+            allowedDomains = append(allowedDomains, d.(string))
+        }
+    }
+    if domains, ok := input["blocked_domains"].([]any); ok {
+        for _, d := range domains {
+            blockedDomains = append(blockedDomains, d.(string))
+        }
+    }
+    return
+}
+
+// ParseTaskInput extracts Task (subagent) tool parameters
+func ParseTaskInput(input map[string]any) (description, prompt, subagentType string) {
+    description, _ = input["description"].(string)
+    prompt, _ = input["prompt"].(string)
+    subagentType, _ = input["subagent_type"].(string)
+    return
+}
+
+// ParseNotebookEditInput extracts NotebookEdit tool parameters
+func ParseNotebookEditInput(input map[string]any) (notebookPath, newSource, cellType, editMode string) {
+    notebookPath, _ = input["notebook_path"].(string)
+    newSource, _ = input["new_source"].(string)
+    cellType, _ = input["cell_type"].(string)
+    editMode, _ = input["edit_mode"].(string)
+    return
+}
+
+// ParseTaskOutputInput extracts TaskOutput tool parameters
+func ParseTaskOutputInput(input map[string]any) (taskID string, block bool, timeout int) {
+    taskID, _ = input["task_id"].(string)
+    block, _ = input["block"].(bool)
+    if t, ok := input["timeout"].(float64); ok {
+        timeout = int(t)
+    } else {
+        timeout = 30000 // default
+    }
+    return
+}
+
+// ParseKillShellInput extracts KillShell tool parameters
+func ParseKillShellInput(input map[string]any) (shellID string) {
+    shellID, _ = input["shell_id"].(string)
+    return
+}
+
+// ParseSkillInput extracts Skill tool parameters
+func ParseSkillInput(input map[string]any) (skill, args string) {
+    skill, _ = input["skill"].(string)
+    args, _ = input["args"].(string)
+    return
+}
+
+// ParseBashBackgroundInput extracts Bash tool parameters including background flag
+func ParseBashBackgroundInput(input map[string]any) (command, description string, timeout int, runInBackground bool) {
+    command, _ = input["command"].(string)
+    description, _ = input["description"].(string)
+    if t, ok := input["timeout"].(float64); ok {
+        timeout = int(t)
+    }
+    runInBackground, _ = input["run_in_background"].(bool)
+    return
+}
+
+// ParseTaskBackgroundInput extracts Task (subagent) tool parameters including background flag
+func ParseTaskBackgroundInput(input map[string]any) (description, prompt, subagentType string, runInBackground bool) {
+    description, _ = input["description"].(string)
+    prompt, _ = input["prompt"].(string)
+    subagentType, _ = input["subagent_type"].(string)
+    runInBackground, _ = input["run_in_background"].(bool)
+    return
 }
 ```
 
@@ -410,7 +1003,7 @@ func (t *ToolCallAdapter) handleExitPlanMode(toolUse *claudecode.ToolUseBlock) {
 
 Manages SDK client lifecycle within Bubble Tea.
 
-### Types
+### Client State
 
 ```go
 package adapter
@@ -423,48 +1016,89 @@ const (
     ClientStateConnecting
     ClientStateConnected
     ClientStateStreaming
+    ClientStateWaitingInput    // Waiting for user input (permission, question, etc.)
+    ClientStatePlanMode        // In plan mode
     ClientStateError
 )
+
+func (s ClientState) String() string {
+    switch s {
+    case ClientStateDisconnected:
+        return "disconnected"
+    case ClientStateConnecting:
+        return "connecting"
+    case ClientStateConnected:
+        return "connected"
+    case ClientStateStreaming:
+        return "streaming"
+    case ClientStateWaitingInput:
+        return "waiting"
+    case ClientStatePlanMode:
+        return "planning"
+    case ClientStateError:
+        return "error"
+    default:
+        return "unknown"
+    }
+}
 
 // ClientStateMsg reports client state changes
 type ClientStateMsg struct {
     State ClientState
     Err   error
 }
-
-// ClientAdapter manages SDK client lifecycle
-type ClientAdapter struct {
-    client  claudecode.Client
-    ctx     context.Context
-    cancel  context.CancelFunc
-    state   ClientState
-    options []claudecode.Option
-}
 ```
 
-### Functions
+### Client Adapter
 
 ```go
-// NewClientAdapter creates a new client adapter with options
-func NewClientAdapter(opts ...claudecode.Option) *ClientAdapter {
+// ClientAdapter manages SDK client lifecycle
+type ClientAdapter struct {
+    client       claudecode.Client
+    toolControl  *ToolControlAdapter
+    ctx          context.Context
+    cancel       context.CancelFunc
+    state        ClientState
+    options      []claudecode.Option
+
+    // Session info
+    sessionID    string
+    model        string
+    planMode     bool
+    autoAccept   bool
+
+    mu           sync.RWMutex
+}
+
+// NewClientAdapter creates a new client adapter
+func NewClientAdapter(program *tea.Program, opts ...claudecode.Option) *ClientAdapter {
+    toolControl := NewToolControlAdapter(program)
+
     return &ClientAdapter{
-        options: opts,
-        state:   ClientStateDisconnected,
+        toolControl: toolControl,
+        options:     opts,
+        state:       ClientStateDisconnected,
     }
 }
 
 // ConnectCmd returns a tea.Cmd that establishes SDK connection
 func (c *ClientAdapter) ConnectCmd() tea.Cmd {
     return func() tea.Msg {
+        c.mu.Lock()
         c.ctx, c.cancel = context.WithCancel(context.Background())
-        c.client = claudecode.NewClient(c.options...)
+
+        // Inject canUseTool callback
+        allOpts := append(c.options, claudecode.WithCanUseTool(c.toolControl.CanUseTool()))
+
+        c.client = claudecode.NewClient(allOpts...)
+        c.mu.Unlock()
 
         if err := c.client.Connect(c.ctx); err != nil {
-            c.state = ClientStateError
+            c.setState(ClientStateError)
             return ClientStateMsg{State: ClientStateError, Err: err}
         }
 
-        c.state = ClientStateConnected
+        c.setState(ClientStateConnected)
         return ClientStateMsg{State: ClientStateConnected}
     }
 }
@@ -472,22 +1106,44 @@ func (c *ClientAdapter) ConnectCmd() tea.Cmd {
 // QueryCmd returns a tea.Cmd that sends a query
 func (c *ClientAdapter) QueryCmd(prompt string) tea.Cmd {
     return func() tea.Msg {
-        if err := c.client.Query(c.ctx, prompt); err != nil {
+        c.mu.RLock()
+        client := c.client
+        ctx := c.ctx
+        c.mu.RUnlock()
+
+        if client == nil {
+            return ClientStateMsg{
+                State: ClientStateError,
+                Err:   fmt.Errorf("client not connected"),
+            }
+        }
+
+        if err := client.Query(ctx, prompt); err != nil {
             return ClientStateMsg{State: ClientStateError, Err: err}
         }
-        c.state = ClientStateStreaming
+
+        c.setState(ClientStateStreaming)
         return ClientStateMsg{State: ClientStateStreaming}
     }
 }
 
 // MessageChannel returns the SDK message channel for streaming
 func (c *ClientAdapter) MessageChannel() <-chan claudecode.Message {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+
+    if c.client == nil {
+        return nil
+    }
     return c.client.ReceiveMessages(c.ctx)
 }
 
 // DisconnectCmd returns a tea.Cmd that closes the connection
 func (c *ClientAdapter) DisconnectCmd() tea.Cmd {
     return func() tea.Msg {
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
         if c.cancel != nil {
             c.cancel()
         }
@@ -502,21 +1158,60 @@ func (c *ClientAdapter) DisconnectCmd() tea.Cmd {
 // InterruptCmd returns a tea.Cmd that interrupts current operation
 func (c *ClientAdapter) InterruptCmd() tea.Cmd {
     return func() tea.Msg {
-        if c.client != nil {
-            c.client.Interrupt(c.ctx)
+        c.mu.RLock()
+        client := c.client
+        ctx := c.ctx
+        c.mu.RUnlock()
+
+        if client != nil {
+            client.Interrupt(ctx)
         }
         return nil
     }
 }
 
-// SetPermissionModeCmd changes permission mode mid-session
-func (c *ClientAdapter) SetPermissionModeCmd(mode claudecode.PermissionMode) tea.Cmd {
-    return func() tea.Msg {
-        if c.client != nil {
-            c.client.SetPermissionMode(c.ctx, mode)
-        }
-        return nil
+// State returns current client state
+func (c *ClientAdapter) State() ClientState {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    return c.state
+}
+
+func (c *ClientAdapter) setState(state ClientState) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.state = state
+}
+
+// SetPlanMode updates plan mode state
+func (c *ClientAdapter) SetPlanMode(enabled bool) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.planMode = enabled
+    if enabled {
+        c.state = ClientStatePlanMode
     }
+}
+
+// SetAutoAccept updates auto-accept state
+func (c *ClientAdapter) SetAutoAccept(enabled bool) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.autoAccept = enabled
+}
+
+// AutoApprove adds a tool to auto-approved list
+func (c *ClientAdapter) AutoApprove(toolName string) {
+    c.toolControl.mu.Lock()
+    defer c.toolControl.mu.Unlock()
+    c.toolControl.autoApproved[toolName] = true
+}
+
+// ClearAutoApprovals removes all auto-approvals
+func (c *ClientAdapter) ClearAutoApprovals() {
+    c.toolControl.mu.Lock()
+    defer c.toolControl.mu.Unlock()
+    c.toolControl.autoApproved = make(map[string]bool)
 }
 ```
 
@@ -524,14 +1219,26 @@ func (c *ClientAdapter) SetPermissionModeCmd(mode claudecode.PermissionMode) tea
 
 ```go
 type Model struct {
-    client *adapter.ClientAdapter
-    // ...
+    client   *adapter.ClientAdapter
+    msgChan  <-chan claudecode.Message
+    ctx      context.Context
+    // components...
+}
+
+func NewModel() Model {
+    return Model{
+        ctx: context.Background(),
+    }
 }
 
 func (m Model) Init() tea.Cmd {
-    m.client = adapter.NewClientAdapter(
+    return nil
+}
+
+func (m *Model) Start(p *tea.Program) tea.Cmd {
+    m.client = adapter.NewClientAdapter(p,
         claudecode.WithPartialStreaming(),
-        claudecode.WithMaxTurns(10),
+        claudecode.WithMaxTurns(30),
     )
     return m.client.ConnectCmd()
 }
@@ -542,20 +1249,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         switch msg.State {
         case adapter.ClientStateConnected:
             m.connected = true
+
         case adapter.ClientStateStreaming:
-            // Start reading messages
-            return m, adapter.StreamCmd(m.ctx, m.client.MessageChannel())
+            m.msgChan = m.client.MessageChannel()
+            return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
         case adapter.ClientStateError:
-            m.err = msg.Err
+            return m, m.toast.Show(toast.Error, "Error", msg.Err.Error())
         }
 
+    case adapter.StreamDeltaMsg:
+        m.streamText.AppendText(msg.Text)
+        return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+    case adapter.StreamDoneMsg:
+        m.streaming = false
+        m.client.setState(adapter.ClientStateConnected)
+        return m, nil
+
+    // Handle permission prompts
+    case adapter.ShowPermissionPromptMsg:
+        m.permission.Show(msg.Request, msg.Respond)
+        return m, nil
+
+    // Handle question prompts
+    case adapter.ShowQuestionPromptMsg:
+        m.question.Show(msg.Questions, msg.Respond)
+        return m, nil
+
+    // Handle plan mode
+    case adapter.ShowPlanEnterPromptMsg:
+        m.planEnter.Show(msg.Respond)
+        return m, nil
+
+    case adapter.ShowPlanExitPromptMsg:
+        m.planExit.Show(msg.PlanFile, msg.Permissions, msg.Respond)
+        return m, nil
+
+    // Handle todo updates
+    case adapter.ShowTodoUpdateMsg:
+        m.todo.Update(msg.Todos)
+        return m, nil
+
+    // Handle chat input submission
     case chatinput.SubmitMsg:
-        // Update permission mode based on toggles
         if msg.AutoAccept {
-            m.client.SetPermissionModeCmd(claudecode.PermissionModeAcceptEdits)
+            m.client.SetAutoAccept(true)
+        }
+        if msg.PlanMode {
+            m.client.SetPlanMode(true)
         }
         return m, m.client.QueryCmd(msg.Text)
     }
+
     return m, nil
 }
 ```
@@ -564,13 +1310,75 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 ## Integration Summary
 
-| SDK Component | Adapter | TUI Message | Component |
-|---------------|---------|-------------|-----------|
-| `StreamEvent` (delta) | `stream.go` | `StreamDeltaMsg` | `StreamText` |
-| `AssistantMessage` | `stream.go` | `AssistantMsg` | `MessageBubble` |
-| `ResultMessage` | `stream.go` | `ResultMsg` | `StatusBar` |
-| `PreToolUseHookInput` | `control.go` | `ShowPermissionPromptMsg` | `PermissionPrompt` |
-| `AskUserQuestion` tool | `control.go` | `ShowQuestionPromptMsg` | `QuestionPrompt` |
-| `EnterPlanMode` tool | `control.go` | `ShowPlanEnterPromptMsg` | `PlanEnterConfirm` |
-| `ExitPlanMode` tool | `control.go` | `ShowPlanExitPromptMsg` | `PlanExitPrompt` |
-| Client lifecycle | `client.go` | `ClientStateMsg` | Layout state |
+### Stream Events to Messages
+
+| SDK Event | Adapter Message | Component |
+|-----------|-----------------|-----------|
+| `content_block_start` (text) | `StreamBlockStartMsg` | streamtext |
+| `content_block_start` (thinking) | `StreamBlockStartMsg` | thinking |
+| `content_block_start` (tool_use) | `StreamBlockStartMsg` | tooluse |
+| `content_block_delta` (text) | `StreamDeltaMsg` | streamtext |
+| `content_block_delta` (thinking) | `ThinkingDeltaMsg` | thinking |
+| `content_block_delta` (input_json) | `ToolUseDeltaMsg` | tooluse |
+| `content_block_stop` | `StreamBlockStopMsg` | all |
+| `message_stop` | `StreamDoneMsg` | layout |
+| `AssistantMessage` | `AssistantMsg` | message |
+| `ResultMessage` | `ResultMsg` | status |
+| Error | `StreamErrorMsg` | toast |
+
+### canUseTool to Components
+
+| Tool | Adapter Message | Component |
+|------|-----------------|-----------|
+| `Bash` | `ShowPermissionPromptMsg` | permission |
+| `Write` | `ShowPermissionPromptMsg` | permission |
+| `Edit` | `ShowPermissionPromptMsg` | permission, diffview |
+| `Read` | `ShowPermissionPromptMsg` | permission |
+| `Glob` | `ShowPermissionPromptMsg` | permission, globresults |
+| `Grep` | `ShowPermissionPromptMsg` | permission, grepresults |
+| `WebFetch` | `ShowPermissionPromptMsg` | permission |
+| `WebSearch` | `ShowPermissionPromptMsg` | permission |
+| `NotebookEdit` | `ShowPermissionPromptMsg` | permission |
+| `Task` | `ShowPermissionPromptMsg` | permission, taskmgr (if background) |
+| `AskUserQuestion` | `ShowQuestionPromptMsg` | question |
+| `EnterPlanMode` | `ShowPlanEnterPromptMsg` | planenter |
+| `ExitPlanMode` | `ShowPlanExitPromptMsg` | planexit |
+| `TodoWrite` | `ShowTodoUpdateMsg` | todo |
+| `TaskOutput` | `ShowTaskOutputRequestMsg` | taskmgr |
+| `KillShell` | `ShowKillShellRequestMsg` | taskmgr |
+| `Skill` | `ShowSkillInvokeMsg` | tooluse |
+
+### Background Task Events
+
+| Event | Adapter Message | Component |
+|-------|-----------------|-----------|
+| Task started | `TaskStartedMsg` | taskstatus, taskmgr |
+| Task progress | `TaskProgressMsg` | taskmgr |
+| Task completed | `TaskCompletedMsg` | taskstatus, taskmgr |
+
+### Session Events
+
+| Event | Adapter Message | Component |
+|-------|-----------------|-----------|
+| Show picker | `ShowSessionPickerMsg` | session |
+| Session selected | `SessionSelectedMsg` | session |
+| Session resumed | `SessionResumedMsg` | layout |
+
+### Search Events
+
+| Event | Adapter Message | Component |
+|-------|-----------------|-----------|
+| Show search | `ShowSearchMsg` | search |
+| Search results | `SearchResultsMsg` | search |
+
+### Client States to UI
+
+| Client State | UI Behavior |
+|--------------|-------------|
+| `Disconnected` | Show connect button |
+| `Connecting` | Show spinner |
+| `Connected` | Enable input |
+| `Streaming` | Show streaming indicator, disable input |
+| `WaitingInput` | Show appropriate prompt component |
+| `PlanMode` | Show plan mode indicator |
+| `Error` | Show error toast, enable retry |
