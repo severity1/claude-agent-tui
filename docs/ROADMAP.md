@@ -47,16 +47,19 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
 
 ---
 
-## Milestone 2: Theme System
+## Milestone 2: Theme System + Accessibility Foundation
 
-**Goal:** Complete theming engine with built-in themes.
+**Goal:** Complete theming engine with built-in themes AND accessibility from day one.
+
+> **Note:** Accessibility moved here from M11.5. It must be foundational, not an afterthought.
 
 ### Deliverables
 
 1. **Theme Interface**
-   - `Theme` interface definition
+   - `Theme` interface definition (simplified: Name, IsDark, Palette)
    - `Palette` struct with all color categories
    - Theme registry (Get, Register, List)
+   - `StylesFromPalette()` factory pattern per component
 
 2. **Built-in Themes**
    - Catppuccin (Mocha, Latte, Frappe, Macchiato)
@@ -66,20 +69,30 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
    - Tokyo Night
    - One Dark
    - System (adaptive)
+   - **High Contrast** (accessibility)
 
-3. **Component Style Integration**
-   - `Styles` struct per component using theme
-   - `StylesFromTheme()` factory functions
+3. **Accessibility Foundation**
+   - `REDUCE_MOTION` environment variable support
+   - `HIGH_CONTRAST` environment variable
+   - Visible focus indicators (always enabled by default)
+   - Color-blindness safe design (symbols + colors, never color alone)
+   - Accessibility config loading from environment
+
+4. **Component Style Integration**
+   - `Styles` struct per component using Palette
    - Syntax highlighting theme adapter (chroma)
+   - Focus ring styling in all interactive components
 
-4. **Theme Switching**
+5. **Theme Switching**
    - Runtime theme change support
    - Persistence options
 
 ### Testing
 - Visual tests for each theme
-- Color contrast validation
+- Color contrast validation (WCAG AAA for high contrast)
 - Light/dark mode testing
+- Reduced motion behavior tests
+- Focus indicator visibility tests
 
 ---
 
@@ -134,9 +147,11 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
 
 ---
 
-## Milestone 4: Chat Input
+## Milestone 4: Chat Input + Client Lifecycle
 
-**Goal:** Primary user input with mode controls.
+**Goal:** Primary user input with mode controls, client lifecycle, and error recovery.
+
+> **Note:** Error recovery and background tasks moved here from M11.5. Client lifecycle needs these.
 
 ### Deliverables
 
@@ -158,21 +173,37 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
    - `ConnectCmd`, `QueryCmd`, `DisconnectCmd`
    - State management (Disconnected, Connected, Streaming, etc.)
 
-4. **Chat Layout (Basic)**
+4. **Error Recovery System**
+   - RecoveryManager with exponential backoff
+   - Auto-reconnect logic with jitter
+   - Partial message recovery (save on error, restore on reconnect)
+   - Connection state indicators (healthy, unstable, lost, reconnecting, failed)
+   - User notification via toasts
+
+5. **Background Task Foundation**
+   - TaskStatus indicator (shows running task count)
+   - Support for `run_in_background` parameter
+   - TaskStartedMsg, TaskProgressMsg, TaskCompletedMsg handling
+   - Basic task tracking (full TaskManager UI in M11)
+
+6. **Chat Layout (Basic)**
    - Message history + current stream
    - Input area at bottom
-   - Status bar
+   - Status bar with connection state
    - Fullscreen, Window, View variants
 
-5. **Full Chat Flow**
+7. **Full Chat Flow**
    - Connect -> Query -> Stream -> Display
    - Multiple turns
-   - Error handling
+   - Error handling with recovery
+   - Graceful degradation on connection loss
 
 ### Testing
 - Input component unit tests
 - Full conversation integration test
 - Manual multi-turn testing
+- Error recovery flow tests
+- Connection state transition tests
 
 ---
 
@@ -208,9 +239,11 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
 
 ---
 
-## Milestone 6: Permission Handling
+## Milestone 6: Permission Handling + Diff Viewer
 
-**Goal:** Tool approval workflow with rich display.
+**Goal:** Tool approval workflow with rich display, including proper diff viewing for Edit tool.
+
+> **Note:** Diff Viewer moved here from M11.5. Edit tool permissions need it.
 
 ### Deliverables
 
@@ -220,32 +253,41 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
    - Allow/Deny/Always Allow options
    - Keyboard navigation
    - Danger highlighting for risky operations
-   - Modal, Overlay, Inline variants
+   - Modal, Card variants
 
 2. **Tool Control Adapter**
    - `canUseTool` callback integration
    - Auto-approval management
    - Response channel pattern
 
-3. **Tool-Specific Displays**
-   - Bash: command preview
-   - Write: file path + content preview
-   - Edit: diff view (old vs new)
-   - Read: file path
+3. **DiffView Component**
+   - Unified diff mode (default)
+   - Split diff mode (side-by-side)
+   - Inline diff mode (within text)
+   - Syntax highlighting for both old and new
+   - Line number display
+   - View, Modal variants
+
+4. **Tool-Specific Displays**
+   - Bash: command preview with description
+   - Write: file path + content preview (collapsible)
+   - Edit: **DiffView** showing old vs new
+   - Read: file path with line range
    - Glob/Grep: pattern + path
 
-4. **Input State Machine**
+5. **Input State Machine**
    - State enum (Chat, Permission, Question, etc.)
    - Transition handling
    - Focus management
 
-5. **Layout Integration**
+6. **Layout Integration**
    - Prompt overlay on permission request
    - Return to chat after decision
 
 ### Testing
 - Permission flow integration tests
 - State machine unit tests
+- Diff rendering tests (unified, split, inline)
 - Manual tool approval testing
 
 ---
@@ -456,73 +498,60 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
 
 ---
 
-## Milestone 11.5: Gap Coverage
+## Milestone 11.5: Remaining Gap Coverage
 
-**Goal:** Address identified coverage gaps for complete SDK integration.
+**Goal:** Address remaining coverage gaps not covered by earlier milestones.
+
+> **Note:** Several items were moved to earlier milestones:
+> - Accessibility Foundation -> M2
+> - Error Recovery System -> M4
+> - Background Task Foundation -> M4
+> - Diff Viewer -> M6
 
 ### Deliverables
 
-1. **Background Task Management**
-   - TaskManager component (Sidebar, Overlay, Modal variants)
-   - TaskStatus indicator (Bar, Compact variants)
-   - Background task output viewer
+1. **Full TaskManager UI**
+   - TaskManager component (Modal, Collapsible variants)
+   - Background task output viewer (scrollable, virtualized)
    - KillShell confirmation dialog
-   - Support for `run_in_background` parameter
+   - Task history panel
 
 2. **Session Management**
-   - SessionPicker component (Modal, Overlay, Sidebar variants)
+   - SessionPicker component (Modal variants)
    - Session persistence and restore
    - Resume from previous conversations
    - Export/import sessions
    - Context window usage tracking
 
-3. **Diff Viewer**
-   - DiffView component (View, Modal, Window variants)
-   - Unified/split/inline diff modes
-   - Syntax highlighting for both sides
-   - Scroll synchronization in split mode
-
-4. **File Result Viewers**
+3. **File Result Viewers**
    - GlobResults component (file tree/list display)
    - GrepResults component (match highlighting)
    - Navigate to file:line on selection
 
-5. **Enhanced Status**
+4. **Enhanced Status**
    - Context window indicator (progress bar)
-   - Background task count
    - Session info display
 
-6. **Error Recovery System**
-   - RecoveryManager with exponential backoff
-   - Auto-reconnect logic
-   - Partial message recovery
-   - Connection state indicators
-   - User notification toasts
+5. **Screen Reader Announcements**
+   - Announcer component for screen reader events
+   - OSC 9 notification support (with limitations noted)
+   - Event-to-announcement mapping
 
-7. **Accessibility System**
-   - `REDUCE_MOTION` environment variable
-   - High contrast theme variant
-   - Screen reader announcements
-   - Visible focus indicators
-   - Color-blindness safe indicators
-
-8. **Search in History**
-   - Search component (Overlay, Modal, Inline variants)
+6. **Search in History**
+   - Search component (Modal variants)
    - Live search as you type
    - Result highlighting
    - Navigate to message on selection
 
-9. **New Tool Support**
+7. **New Tool Support**
    - TaskOutput tool integration
    - KillShell tool integration
    - Skill tool integration
 
 ### Testing
-- Background task flow tests
+- Full TaskManager flow tests
 - Session save/load tests
-- Diff rendering tests
-- Recovery behavior tests
-- Accessibility compliance tests
+- Search functionality tests
 
 ### Dependencies
 - Milestone 11 (Advanced Features)
@@ -612,36 +641,32 @@ This roadmap outlines the phased implementation of `claude-agent-tui`. Each mile
 | Milestone | Dependencies | Rationale |
 |-----------|-------------|-----------|
 | 1 | None | Foundation - must be first |
-| 2 | 1 | Themes need base styles |
+| 2 | 1 | Themes + accessibility need base styles |
 | 3 | 1, 2 | Messages need themes |
-| 4 | 1, 2, 3 | Input needs message display |
+| 4 | 1, 2, 3 | Input + client lifecycle needs message display |
 | 5 | 1, 4 | Keybindings need input to test |
-| 6 | 1, 2, 4, 5 | Permissions need input + keys |
+| 6 | 1, 2, 4, 5 | Permissions + diff viewer need input + keys |
 | 7 | 1, 2, 4, 5, 6 | Questions build on permission pattern |
-| 8 | 1, 2, 4, **6** | Mouse needs clickable components to test |
-| 9 | 1, 2, **3, 4** | Animations need components to animate |
+| 8 | 1, 2, 4, 6 | Mouse needs clickable components to test |
+| 9 | 1, 2, 3, 4 | Animations need components to animate |
 | 10 | 1, 2, 3, 4 | Responsive needs full layout |
 | 11 | 1-10 | Advanced features need core complete |
-| 11.5 | 11 | Gap coverage |
+| 11.5 | 11 | Remaining gap coverage |
 | 12 | 1-11.5 | Final integration |
 | 13 | 1-12 | Documentation |
 
-**Corrected dependencies (bold):**
-- M8 (Mouse) now depends on M6 (Permission) - need clickable permission buttons to test
-- M9 (Animation) now depends on M3, M4 - need components to animate
-
 ---
 
-## Reordering Recommendations
+## Applied Reordering
 
-Several features in M11.5 should be moved earlier:
+The following features were moved from M11.5 to earlier milestones:
 
-| Feature | Current | Recommended | Reason |
-|---------|---------|-------------|--------|
-| Accessibility | M11.5 | **M2** | Must be foundational, not afterthought |
-| Error recovery | M11.5 | **M4** | Client lifecycle needs recovery |
-| Background tasks | M11.5 | **M4** | Part of client lifecycle |
-| Diff viewer | M11.5 | **M6** | Needed for Edit tool permissions |
+| Feature | Original | Moved To | Reason |
+|---------|----------|----------|--------|
+| Accessibility Foundation | M11.5 | **M2** | Must be foundational, not afterthought |
+| Error Recovery | M11.5 | **M4** | Client lifecycle needs recovery |
+| Background Task Foundation | M11.5 | **M4** | Part of client lifecycle |
+| Diff Viewer | M11.5 | **M6** | Needed for Edit tool permissions |
 
 ---
 
@@ -675,10 +700,14 @@ See [MVP.md](MVP.md) for the minimal implementation plan.
 |---------|-----------|----------|-------|
 | Streaming text | 1 | Critical | MVP |
 | Theme system | 2 | High | Basic theme in M1, full in M2 |
+| **Accessibility foundation** | **2** | **High** | **Moved from M11.5** |
 | Message display | 3 | Critical | MVP (simplified) |
 | Chat input | 4 | Critical | MVP |
+| **Error recovery** | **4** | **High** | **Moved from M11.5** |
+| **Background task foundation** | **4** | **High** | **Moved from M11.5** |
 | Keybindings | 5 | High | Basic in M1, full in M5 |
 | Permission prompts | 6 | Critical | MVP |
+| **Diff viewer** | **6** | **High** | **Moved from M11.5** |
 | Question prompts | 7 | Critical | |
 | Plan mode | 7 | High | |
 | Todo display | 7 | Medium | |
@@ -688,12 +717,10 @@ See [MVP.md](MVP.md) for the minimal implementation plan.
 | Responsive layout | 10 | High | |
 | FilePicker | 11 | Low | |
 | Copy support | 11 | Medium | |
-| Background task management | 4 (moved) | High | Part of client |
+| Full TaskManager UI | 11.5 | Medium | Builds on M4 foundation |
 | Session management | 11.5 | Medium | Complex, defer |
-| Diff viewer | 6 (moved) | High | Edit tool needs it |
 | File result viewers | 11.5 | Medium | |
-| Error recovery | 4 (moved) | High | Client needs it |
-| Accessibility (REDUCE_MOTION) | 2 (moved) | High | Foundational |
+| Screen reader announcements | 11.5 | Low | Limited terminal support |
 | Search in history | 11.5 | Low | |
 | TaskOutput/KillShell/Skill | 11.5 | High | |
 | Dashboard layout | 12 | Medium | |

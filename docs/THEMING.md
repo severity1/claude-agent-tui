@@ -16,38 +16,75 @@ The theme system provides:
 
 ## Theme Interface
 
+The original 18-method interface was over-engineered. Themes provide colors, components build their own styles.
+
 ```go
 package theme
 
 import "github.com/charmbracelet/lipgloss"
 
+// Theme provides identity and colors. That's it.
 type Theme interface {
-    // Identity
     Name() string
     IsDark() bool
-
-    // Color palette
     Palette() Palette
+}
 
-    // Component styles - each returns fully configured styles
-    StreamText() streamtext.Styles
-    Message() message.Styles
-    Thinking() thinking.Styles
-    ToolUse() tooluse.Styles
-    CodeBlock() codeblock.Styles
-    Status() status.Styles
-    Toast() toast.Styles
-    ChatInput() chatinput.Styles
-    Permission() permission.Styles
-    Question() question.Styles
-    PlanEnter() planenter.Styles
-    PlanExit() planexit.Styles
-    Interrupt() interrupt.Styles
-    Confirm() confirm.Styles
-    FilePicker() filepicker.Styles
-    Todo() todo.Styles
+// BaseTheme provides a default implementation
+type BaseTheme struct {
+    name    string
+    dark    bool
+    palette Palette
+}
+
+func (t *BaseTheme) Name() string      { return t.name }
+func (t *BaseTheme) IsDark() bool      { return t.dark }
+func (t *BaseTheme) Palette() Palette  { return t.palette }
+```
+
+### Component Style Factories
+
+Components generate their own styles from a Palette. No circular imports.
+
+```go
+// In component/streamtext/styles.go
+package streamtext
+
+import "github.com/severity1/claude-agent-tui/system/theme"
+
+type Styles struct {
+    Container lipgloss.Style
+    Text      lipgloss.Style
+    Cursor    lipgloss.Style
+}
+
+// StylesFromPalette creates styles from a theme palette
+func StylesFromPalette(p theme.Palette) Styles {
+    return Styles{
+        Container: lipgloss.NewStyle().
+            Background(p.Background),
+        Text: lipgloss.NewStyle().
+            Foreground(p.Text),
+        Cursor: lipgloss.NewStyle().
+            Foreground(p.Primary).
+            Bold(true),
+    }
 }
 ```
+
+### Usage
+
+```go
+// Get theme and build component styles
+t := theme.Get("catppuccin-mocha")
+p := t.Palette()
+
+stream := streamtext.New(
+    streamtext.WithStyles(streamtext.StylesFromPalette(p)),
+)
+```
+
+This avoids the 18-method interface, prevents circular imports, and lets components own their styling logic.
 
 ---
 

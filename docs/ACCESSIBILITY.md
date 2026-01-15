@@ -218,8 +218,18 @@ func (a *Announcer) Announce(msg Announcement) {
         return
     }
 
-    // OSC 777 for notifications (works in many terminals)
-    fmt.Fprintf(a.output, "\x1b]777;notify;%s\x07", msg.Message)
+    // Try multiple notification methods for compatibility
+    // OSC 777 - Supported by: rxvt-unicode, some terminal multiplexers
+    // OSC 9 - Supported by: iTerm2, Konsole
+    // OSC 99 - Supported by: kitty
+    // Bell (\a) - Universal fallback, works everywhere
+    //
+    // LIMITATION: No single method works across all terminals.
+    // Screen reader users should configure their terminal + screen reader combo.
+    // Consider logging to a file that screen readers can monitor.
+
+    // Try OSC 9 (wider support than OSC 777)
+    fmt.Fprintf(a.output, "\x1b]9;%s\x07", msg.Message)
 }
 
 // AnnouncePolite waits for idle before announcing

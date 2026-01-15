@@ -176,8 +176,8 @@ var DefaultKeymap = Keymap{
         key.WithHelp("ctrl+c", "interrupt"),
     ),
     NewLine: key.NewBinding(
-        key.WithKeys("ctrl+enter", "alt+enter"),
-        key.WithHelp("ctrl+enter", "new line"),
+        key.WithKeys("alt+enter"),
+        key.WithHelp("alt+enter", "new line"),
     ),
 
     // Permission

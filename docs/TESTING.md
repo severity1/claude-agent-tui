@@ -48,6 +48,17 @@ func init() {
     // Force consistent output across all environments
     lipgloss.SetColorProfile(termenv.Ascii)
 }
+
+// IMPORTANT: ASCII mode strips all ANSI styling.
+// Golden files created this way do NOT test:
+// - Color correctness
+// - Bold/italic/underline rendering
+// - Theme color application
+//
+// For color testing, consider:
+// - Separate color tests with termenv.TrueColor profile
+// - Visual regression testing with screenshots
+// - Manual review of color themes
 ```
 
 Add to `.gitattributes` to prevent line ending issues:
@@ -1017,22 +1028,41 @@ teatest.WithFinalTimeout(60 * time.Second)
 
 ### CI Requirements
 
-CI runners need Claude Code installed:
+CI runners need Claude Code installed.
+
+**IMPORTANT:** This is a gap in our setup. Options to address:
+
+1. **Self-hosted runner** - Pre-install Claude Code on your own runner
+2. **Mock-only CI** - Skip SDK tests in GitHub Actions, run locally
+3. **Setup script** - Create a CI setup script (not yet implemented)
+
+For now, SDK integration tests should be run locally before PR merge.
 
 ```yaml
 jobs:
+  unit-tests:
+    runs-on: ubuntu-latest  # Unit tests don't need Claude Code
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Run unit tests
+        run: go test -v -short ./...
+
   integration:
-    runs-on: self-hosted  # With Claude Code installed
-    # OR use a setup step if installable via script
+    runs-on: self-hosted  # Requires Claude Code pre-installed
     steps:
       - name: Verify Claude Code
         run: |
           claude --version || (echo "Claude Code not installed" && exit 1)
 
-      - name: Run tests
-        run: go test -v ./...
+      - name: Run integration tests
+        run: go test -v -run Integration ./...
         timeout-minutes: 15
 ```
+
+**TODO:** Create a setup script or Docker image with Claude Code for CI.
 
 ### Capturing Real Message Formats
 

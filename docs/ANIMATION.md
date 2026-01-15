@@ -79,7 +79,7 @@ type Animation interface {
 
 ### FadeIn / FadeOut
 
-Opacity transition using ANSI color manipulation.
+Simulated fade using color interpolation toward background. Note: ANSI terminals don't support true opacity - we interpolate foreground colors toward the background color to simulate fading.
 
 ```go
 type FadeIn struct {
