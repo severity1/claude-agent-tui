@@ -1,6 +1,7 @@
 ---
 name: charmbracelet
-description: Complete Charmbracelet ecosystem guidance for building terminal UIs. Covers bubbletea (Elm architecture TUI framework), lipgloss (styling), bubbles (components like list, viewport, spinner, progress, table, textarea, help), huh (forms), glamour (markdown), harmonica (animations), log (structured logging), and x/ experimental packages (teatest, ansi, term). Use when building TUI applications, styling terminal output, creating forms, rendering markdown, adding animations, or testing TUI components.
+version: "1.0"
+description: This skill should be used when building terminal UIs with the Charmbracelet ecosystem. Covers bubbletea (Elm architecture TUI framework), lipgloss (styling), bubbles (components like list, viewport, spinner, progress, table, textarea, help), huh (forms), glamour (markdown), harmonica (animations), log (structured logging), and x/ experimental packages (teatest, ansi, term). Use when the user asks about "bubble tea model", "tea.Cmd", "tea.Msg", "lipgloss styling", "terminal colors", "TUI components", "viewport scrolling", "text input component", "spinner animation", "list.Model", "form validation with huh", "render markdown in terminal", "spring animation", "testing TUI apps with teatest", "REDUCE_MOTION", "accessibility in TUI", or "focus indicators".
 ---
 
 # Charmbracelet Ecosystem Skill
@@ -114,19 +115,6 @@ For detailed API documentation, read the appropriate reference file:
 | TUI testing with teatest | [references/teatest.md](references/teatest.md) |
 | ansi, term, other x/ utilities | [references/experimental.md](references/experimental.md) |
 
-## Live Documentation
-
-For the latest API changes, use WebFetch on these URLs:
-
-- **bubbletea**: https://github.com/charmbracelet/bubbletea
-- **lipgloss**: https://github.com/charmbracelet/lipgloss
-- **bubbles**: https://github.com/charmbracelet/bubbles
-- **huh**: https://github.com/charmbracelet/huh
-- **glamour**: https://github.com/charmbracelet/glamour
-- **harmonica**: https://github.com/charmbracelet/harmonica
-- **log**: https://github.com/charmbracelet/log
-- **x/ (experimental)**: https://github.com/charmbracelet/x
-
 ## Installation
 
 ```bash
@@ -152,6 +140,81 @@ go get github.com/charmbracelet/x/exp/teatest
 5. **Forward messages to sub-components** - They need tick/key messages
 6. **Log to file for TUIs** - Avoid stdout interference
 7. **Test with teatest** - Unit test your models
+
+## Accessibility
+
+Build accessible TUI applications:
+
+### REDUCE_MOTION Support
+
+Check for reduced motion preference and disable animations:
+
+```go
+import "os"
+
+func shouldReduceMotion() bool {
+    return os.Getenv("REDUCE_MOTION") == "1"
+}
+
+// In animation code
+if shouldReduceMotion() {
+    // Skip animation, apply final state immediately
+    m.position = targetPosition
+    return m, nil
+}
+// Normal animation with harmonica
+```
+
+See [references/harmonica.md](references/harmonica.md) for spring animation accessibility patterns.
+
+### Focus Indicators
+
+Always show visible focus indicators on interactive elements:
+
+```go
+func (m Model) View() string {
+    style := m.styles.Item
+
+    if m.focused {
+        style = style.
+            Border(lipgloss.RoundedBorder()).
+            BorderForeground(lipgloss.Color("#7D56F4"))
+    }
+
+    return style.Render(content)
+}
+```
+
+### Color Independence
+
+Never rely on color alone - use symbols alongside colors:
+
+```go
+// Good: Symbol + color
+func statusView(isError bool) string {
+    if isError {
+        return lipgloss.NewStyle().
+            Foreground(lipgloss.Color("9")).
+            Render("[!] Error")
+    }
+    return lipgloss.NewStyle().
+        Foreground(lipgloss.Color("10")).
+        Render("[+] Success")
+}
+```
+
+### High Contrast Support
+
+Support high contrast mode via environment variable:
+
+```go
+func loadTheme() Theme {
+    if os.Getenv("HIGH_CONTRAST") == "1" {
+        return HighContrastTheme
+    }
+    return DefaultTheme
+}
+```
 
 ## Common Patterns
 

@@ -65,6 +65,10 @@ Launch 3 Explore agents IN PARALLEL using the Task tool:
 ```
 Explore the claude-agent-tui codebase for patterns relevant to this task:
 
+**IMPORTANT: Read skill references first for framework patterns:**
+- Read .claude/skills/charmbracelet/SKILL.md for Bubble Tea best practices
+- Read relevant reference files in .claude/skills/charmbracelet/references/
+
 Project structure:
 - component/output/ - Display components (StreamText, MessageBubble, etc.)
 - component/input/ - Input components (ChatInput, PermissionPrompt, etc.)
@@ -106,6 +110,10 @@ Report testing conventions that should be followed.
 **Agent 3 - SDK Integration Patterns:**
 ```
 Explore SDK integration patterns relevant to this task:
+
+**IMPORTANT: Read skill references first for SDK patterns:**
+- Read .claude/skills/claude-agent-sdk-go/SKILL.md for SDK best practices
+- Read relevant reference files in .claude/skills/claude-agent-sdk-go/references/
 
 Check adapter/ directory for:
 - Stream event to tea.Msg conversion patterns
