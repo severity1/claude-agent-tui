@@ -126,6 +126,46 @@ func (a *ClientAdapter) Disconnect() tea.Cmd
 - [ ] Timeout errors handled gracefully
 - [ ] Error messages are user-friendly
 
+### PHASE 5.5: Error Recovery Validation (M4 Priority)
+
+Per docs/ERROR-HANDLING.md, validate error recovery patterns:
+
+#### Connection State Machine
+```go
+// Expected states per docs/ERROR-HANDLING.md
+type ConnectionState int
+const (
+    StateHealthy      ConnectionState = iota
+    StateUnstable     // Intermittent issues
+    StateLost         // Connection dropped
+    StateReconnecting // Attempting recovery
+    StateFailed       // Recovery failed
+)
+```
+
+**Check for**:
+- Connection state tracking implemented
+- State transitions logged/surfaced to TUI
+- User notification via toast/status on state changes
+
+#### Exponential Backoff
+**Check for**:
+- Retry logic uses exponential backoff with jitter
+- Maximum retry attempts configured
+- Backoff resets on successful connection
+
+#### Partial Message Recovery
+**Check for**:
+- In-flight messages saved on connection drop
+- Partial content recoverable on reconnect
+- User informed of recovery status
+
+#### Background Task Handling (M4)
+**Check for**:
+- TaskStartedMsg, TaskProgressMsg, TaskCompletedMsg handling
+- Background task tracking (run_in_background support)
+- Task status surfaced to TUI
+
 ### PHASE 6: Report Format
 
 ```
@@ -167,6 +207,12 @@ GOROUTINE/CHANNEL SAFETY:
 - Leaks detected: [Yes/No - details]
 - Race conditions: [Yes/No - details]
 
+ERROR RECOVERY (M4):
+- Connection State Machine: [OK/ISSUE/NOT IMPL]
+- Exponential Backoff: [OK/ISSUE/NOT IMPL]
+- Partial Message Recovery: [OK/ISSUE/NOT IMPL]
+- Background Task Handling: [OK/ISSUE/NOT IMPL]
+
 POSITIVE OBSERVATIONS:
 - [Good patterns observed]
 
@@ -175,6 +221,7 @@ ADAPTER SCORE: X/10
 - Hook Integration: X/10
 - Error Propagation: X/10
 - Resource Management: X/10
+- Error Recovery: X/10 (when applicable)
 ```
 
 ## Reference Documents
@@ -182,6 +229,8 @@ ADAPTER SCORE: X/10
 When reviewing, consult:
 - `docs/ADAPTERS.md` - Adapter specifications
 - `docs/ARCHITECTURE.md` - System design patterns
+- `docs/SDK-MAPPING.md` - SDK event to message mapping
+- `docs/ERROR-HANDLING.md` - Error recovery patterns (M4 priority)
 - SDK documentation at `../claude-code-sdk-go/`
 
 ## Critical Reminders

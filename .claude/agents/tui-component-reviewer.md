@@ -118,7 +118,38 @@ func DefaultStyles() Styles
 - No hardcoded colors (use style system)
 - Proper border, padding, margin usage
 
-### PHASE 3: Common Issues Checklist
+### PHASE 3: Accessibility Validation
+
+Per docs/ACCESSIBILITY.md (M2 priority), validate:
+
+#### REDUCE_MOTION Support
+```go
+// Check for motion reduction support
+if os.Getenv("REDUCE_MOTION") != "" {
+    // Disable or simplify animations
+}
+```
+
+**Check for**:
+- Animations respect REDUCE_MOTION environment variable
+- Fallback to instant transitions when motion reduced
+- No essential information conveyed only through animation
+
+#### Focus Indicators
+**Check for**:
+- Visible focus indicators on all interactive elements
+- Focus ring styling uses theme colors
+- Focus state visually distinct from hover/selected states
+- Tab order is logical
+
+#### Color Accessibility
+**Check for**:
+- Information not conveyed by color alone (use symbols + colors)
+- High contrast mode support (HIGH_CONTRAST env var)
+- Sufficient contrast ratios for text
+- Color-blind safe design patterns
+
+### PHASE 4: Common Issues Checklist
 
 - [ ] Model returns new value in Update(), not pointer mutation
 - [ ] tea.Cmd functions are pure (no side effects except the command)
@@ -128,8 +159,11 @@ func DefaultStyles() Styles
 - [ ] Viewport/scrolling handled for long content
 - [ ] Terminal width/height respected
 - [ ] ANSI escape codes not hardcoded (use Lip Gloss)
+- [ ] REDUCE_MOTION respected for animations
+- [ ] Focus indicators visible on interactive elements
+- [ ] Information not conveyed by color alone
 
-### PHASE 4: Report Format
+### PHASE 5: Report Format
 
 ```
 COMPONENT REVIEW: [component name]
@@ -163,6 +197,11 @@ ISSUES FOUND:
 | Major | ... | file:line | ... |
 | Minor | ... | file:line | ... |
 
+ACCESSIBILITY:
+- REDUCE_MOTION: [OK/ISSUE/N/A]
+- Focus Indicators: [OK/ISSUE/N/A]
+- Color Independence: [OK/ISSUE]
+
 POSITIVE OBSERVATIONS:
 - [Good patterns observed]
 
@@ -171,6 +210,7 @@ COMPONENT SCORE: X/10
 - Message Design: X/10
 - Styling: X/10
 - Focus Management: X/10 (if applicable)
+- Accessibility: X/10
 ```
 
 ## Reference Documents
@@ -178,6 +218,10 @@ COMPONENT SCORE: X/10
 When reviewing, consult:
 - `docs/COMPONENTS.md` - Component specifications
 - `docs/ARCHITECTURE.md` - System design patterns
+- `docs/ACCESSIBILITY.md` - Accessibility requirements (M2 priority)
+- `docs/THEMING.md` - Theme system patterns
+- `docs/TESTING.md` - Test patterns and conventions
+- `docs/VARIANT_MATRIX.md` - Component variant compliance
 - `CLAUDE.md` - Project conventions
 
 ## Critical Reminders

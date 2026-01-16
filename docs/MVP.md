@@ -32,19 +32,23 @@ claude-agent-tui/
 ├── go.sum
 ├── example/
 │   └── chat/
-│       └── main.go           # Working example
+│       └── main.go                    # Working example
 ├── component/
-│   ├── streamtext/
-│   │   └── streamtext.go     # Streaming text display
-│   ├── chatinput/
-│   │   └── chatinput.go      # Text input with submit
-│   └── permission/
-│       └── permission.go     # Tool approval prompt
+│   ├── output/
+│   │   └── streamtext/
+│   │       └── streamtext.go          # Streaming text display
+│   ├── input/
+│   │   ├── chatinput/
+│   │   │   └── chatinput.go           # Text input with submit
+│   │   └── permission/
+│   │       └── permission.go          # Tool approval prompt
+│   └── shared/                        # Shared primitives (added post-MVP)
 ├── adapter/
-│   ├── stream.go             # SDK events to tea.Msg
-│   └── control.go            # canUseTool callback handler
+│   ├── stream.go                      # SDK events to tea.Msg
+│   └── control.go                     # canUseTool callback handler
 └── layout/
-    └── chat.go               # Composes components
+    └── chat/
+        └── chat.go                    # Composes components
 ```
 
 No `system/`, no `style/`, no theme files. Add when needed.
@@ -70,7 +74,7 @@ No `system/`, no `style/`, no theme files. Add when needed.
    - `StreamErrorMsg{Err error}` - error occurred
    - `StreamCmd()` - reads from channel, returns next message
 
-3. **component/streamtext/streamtext.go** - displays streaming text
+3. **component/output/streamtext/streamtext.go** - displays streaming text
    - `Append(text string)` - add text
    - `Clear()` - reset content
    - `SetStreaming(bool)` - show/hide cursor
@@ -78,13 +82,13 @@ No `system/`, no `style/`, no theme files. Add when needed.
 
 ### Phase 2: Input (Day 2-3)
 
-4. **component/chatinput/chatinput.go** - text input
+4. **component/input/chatinput/chatinput.go** - text input
    - Wraps `bubbles/textarea`
    - Enter submits, Alt+Enter newline
    - Emits `SubmitMsg{Text string}`
    - `Focus()`, `Blur()` methods
 
-5. **layout/chat.go** - composes stream + input
+5. **layout/chat/chat.go** - composes stream + input
    - Stream at top, input at bottom
    - Routes messages to correct component
    - Manages focus state
@@ -100,12 +104,12 @@ No `system/`, no `style/`, no theme files. Add when needed.
    - Channel-based blocking for SDK callback
    - Auto-approve tracking per tool
 
-8. **component/permission/permission.go** - approval UI
+8. **component/input/permission/permission.go** - approval UI
    - Shows tool name and input
    - Allow/Deny/Always options
    - Keyboard shortcuts (a/y, d/n, A)
 
-9. **Update layout/chat.go** - full integration
+9. **Update layout/chat/chat.go** - full integration
    - Connect to SDK on init
    - Handle permission overlay
    - Stream queries to display
@@ -247,7 +251,9 @@ StreamTextMsg -> StreamText.Append()
 
 ## Testing Strategy
 
-### Unit Tests (component/*_test.go)
+### Unit Tests
+
+Test files live alongside implementation (e.g., `component/output/streamtext/streamtext_test.go`).
 
 ```go
 func TestStreamText_Append(t *testing.T) {
@@ -283,7 +289,7 @@ func TestPermission_Shortcuts(t *testing.T) {
 }
 ```
 
-### Integration Test (layout/chat_test.go)
+### Integration Test (layout/chat/chat_test.go)
 
 ```go
 func TestChatLayout_FullFlow(t *testing.T) {

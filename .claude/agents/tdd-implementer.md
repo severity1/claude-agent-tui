@@ -341,3 +341,11 @@ Follow conventional commits:
 - `fix:` - Bug fixes
 
 Always use HEREDOC for multi-line messages to preserve formatting.
+
+## Reference Documents
+
+When implementing, consult:
+- `docs/TESTING.md` - **Primary reference** for test patterns, teatest usage, golden files, coverage goals
+- `docs/COMPONENTS.md` - Component specifications and interfaces
+- `docs/ARCHITECTURE.md` - System design patterns
+- `CLAUDE.md` - Project conventions and code standards
