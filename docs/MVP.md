@@ -45,7 +45,8 @@ claude-agent-tui/
 │   └── shared/                        # Shared primitives (added post-MVP)
 ├── adapter/
 │   ├── stream.go                      # SDK events to tea.Msg
-│   └── control.go                     # canUseTool callback handler
+│   ├── control.go                     # canUseTool callback handler
+│   └── client.go                      # SDK client lifecycle
 └── layout/
     └── chat/
         └── chat.go                    # Composes components
@@ -57,76 +58,105 @@ No `system/`, no `style/`, no theme files. Add when needed.
 
 ## Implementation Order
 
-### Phase 1: Foundation (Day 1-2)
+> **GitHub Issues:** Each step maps to `[MVP-N]` issue. Dependencies shown as `->`.
 
-1. **Project setup**
+### Phase 1: Foundation
+
+**Dependency chain:** 1 -> 2 -> 2.5, 1 -> 3
+
+1. **Project setup** `[MVP-1]` `#7`
    ```bash
    go mod init github.com/severity1/claude-agent-tui
    go get github.com/charmbracelet/bubbletea
    go get github.com/charmbracelet/lipgloss
    go get github.com/charmbracelet/bubbles/textarea
    go get github.com/charmbracelet/bubbles/viewport
+   go get github.com/severity1/claude-agent-sdk-go
    ```
 
-2. **adapter/stream.go** - SDK channel to tea.Msg
+2. **adapter/stream.go** `[MVP-2]` `#8` - SDK channel to tea.Msg
+   - Depends on: #7
    - `StreamTextMsg{Text string}` - text delta
    - `StreamDoneMsg{}` - stream complete
    - `StreamErrorMsg{Err error}` - error occurred
    - `StreamCmd()` - reads from channel, returns next message
 
-3. **component/output/streamtext/streamtext.go** - displays streaming text
+2.5. **adapter/client.go** `[MVP-2.5]` `#17` - SDK client lifecycle
+   - Depends on: #8
+   - `ClientAdapter` struct wrapping SDK client
+   - `ConnectCmd()`, `QueryCmd()`, `InterruptCmd()`, `DisconnectCmd()`
+   - `ClientStateMsg` for connection state changes
+   - Thread-safe access with mutex
+
+3. **component/output/streamtext/streamtext.go** `[MVP-3]` `#9` - displays streaming text
+   - Depends on: #7
    - `Append(text string)` - add text
    - `Clear()` - reset content
    - `SetStreaming(bool)` - show/hide cursor
    - Simple `View()` - content + optional cursor
 
-### Phase 2: Input (Day 2-3)
+### Phase 2: Input
 
-4. **component/input/chatinput/chatinput.go** - text input
+**Dependency chain:** 1 -> 4, (3 + 4) -> 5 -> 6
+
+4. **component/input/chatinput/chatinput.go** `[MVP-4]` `#1` - text input
+   - Depends on: #7
    - Wraps `bubbles/textarea`
    - Enter submits, Alt+Enter newline
    - Emits `SubmitMsg{Text string}`
    - `Focus()`, `Blur()` methods
 
-5. **layout/chat/chat.go** - composes stream + input
+5. **layout/chat/chat.go** `[MVP-5]` `#3` - composes stream + input
+   - Depends on: #9, #1
    - Stream at top, input at bottom
    - Routes messages to correct component
    - Manages focus state
 
-6. **example/chat/main.go** - working example
+6. **example/chat/main.go** `[MVP-6]` `#5` - working example
+   - Depends on: #3
    - Test stream + input without SDK
    - Mock data for development
 
-### Phase 3: SDK Integration (Day 3-4)
+### Phase 3: SDK Integration
 
-7. **adapter/control.go** - permission handling
+**Dependency chain:** 2 -> 7, 1 -> 8, (6 + 7 + 8 + 2.5) -> 9
+
+7. **adapter/control.go** `[MVP-7]` `#10` - permission handling
+   - Depends on: #8
    - `ShowPermissionMsg` with response callback
    - Channel-based blocking for SDK callback
    - Auto-approve tracking per tool
 
-8. **component/input/permission/permission.go** - approval UI
+8. **component/input/permission/permission.go** `[MVP-8]` `#11` - approval UI
+   - Depends on: #7
    - Shows tool name and input
    - Allow/Deny/Always options
    - Keyboard shortcuts (a/y, d/n, A)
 
-9. **Update layout/chat/chat.go** - full integration
-   - Connect to SDK on init
+9. **Update layout/chat/chat.go** `[MVP-9]` `#12` - full integration
+   - Depends on: #5, #10, #11, #17
+   - Connect to SDK on init via ClientAdapter
    - Handle permission overlay
    - Stream queries to display
 
-### Phase 4: Polish (Day 4-5)
+### Phase 4: Polish
 
-10. **Error handling**
+**Dependency chain:** 9 -> (10, 11, 12)
+
+10. **Error handling** `[MVP-10]` `#2`
+    - Depends on: #12
     - Connection errors show message
     - Stream errors allow retry
     - Ctrl+C interrupts or quits appropriately
 
-11. **Basic styling**
+11. **Basic styling** `[MVP-11]` `#4`
+    - Depends on: #12
     - Hardcoded colors (extract to theme later)
     - Borders on permission dialog
     - Visual feedback for streaming state
 
-12. **Test with real SDK**
+12. **Test with real SDK** `[MVP-12]` `#6`
+    - Depends on: #12
     - Verify all event types handled
     - Test permission flow
     - Test interruption
@@ -218,6 +248,39 @@ type ToolControl struct {
 func (t *ToolControl) CanUseTool() func(context.Context, string, map[string]any, string) (bool, error)
 ```
 
+### Client Adapter
+
+```go
+type ClientStateMsg struct {
+    State ClientState
+    Error error
+}
+
+type ClientState int
+
+const (
+    ClientStateDisconnected ClientState = iota
+    ClientStateConnecting
+    ClientStateConnected
+    ClientStateStreaming
+    ClientStateError
+)
+
+type ClientAdapter struct {
+    client  *claudecode.Client
+    program *tea.Program
+    msgChan <-chan claudecode.Message
+    mu      sync.Mutex
+}
+
+// Methods
+func (c *ClientAdapter) SetProgram(p *tea.Program)
+func (c *ClientAdapter) ConnectCmd() tea.Cmd
+func (c *ClientAdapter) QueryCmd(text string) tea.Cmd
+func (c *ClientAdapter) InterruptCmd() tea.Cmd
+func (c *ClientAdapter) DisconnectCmd() tea.Cmd
+```
+
 ---
 
 ## Message Flow
@@ -226,25 +289,43 @@ func (t *ToolControl) CanUseTool() func(context.Context, string, map[string]any,
 User types -> ChatInput -> SubmitMsg -> Layout
                                           |
                                           v
-                                    SDK.Query()
+                                  ClientAdapter.QueryCmd()
                                           |
                                           v
-SDK streams <- StreamCmd() <- msgChan <- SDK
+                                   ClientStateMsg{Streaming}
+                                          |
+                                          v
+SDK streams <- StreamCmd() <- msgChan <- ClientAdapter <- SDK
      |
      v
 StreamTextMsg -> StreamText.Append()
      |
      v
-[Tool request] -> ShowPermissionMsg -> Permission.Show()
-                                            |
-                                            v
-                                     User decision
-                                            |
-                                            v
-                                     Respond callback
-                                            |
-                                            v
-                                     SDK continues
+[Tool request] -> ToolControl.CanUseTool() -> ShowPermissionMsg
+                                                    |
+                                                    v
+                                            Permission.Show()
+                                                    |
+                                                    v
+                                             User decision
+                                                    |
+                                                    v
+                                             Respond callback
+                                                    |
+                                                    v
+                                             SDK continues
+```
+
+### Connection Lifecycle
+
+```
+App Start -> ClientAdapter.ConnectCmd() -> ClientStateMsg{Connected}
+                                                    |
+                                                    v
+                                            Ready for queries
+                                                    |
+                                                    v
+App Quit  -> ClientAdapter.DisconnectCmd() -> ClientStateMsg{Disconnected}
 ```
 
 ---
