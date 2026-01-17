@@ -152,6 +152,34 @@ func TestStreamErrorMsg_Fields(t *testing.T) {
 	}
 }
 
+func TestStreamErrorMsg_Error(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		wantStr string
+	}{
+		{
+			name:    "with error",
+			err:     context.Canceled,
+			wantStr: "context canceled",
+		},
+		{
+			name:    "nil error",
+			err:     nil,
+			wantStr: "unknown stream error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := adapter.StreamErrorMsg{Err: tt.err}
+			if got := msg.Error(); got != tt.wantStr {
+				t.Errorf("Error() = %q, want %q", got, tt.wantStr)
+			}
+		})
+	}
+}
+
 // ============================================================================
 // StreamCmd Tests
 // ============================================================================

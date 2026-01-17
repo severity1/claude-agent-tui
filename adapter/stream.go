@@ -76,6 +76,14 @@ type StreamErrorMsg struct {
 	Err error
 }
 
+// Error implements the error interface for StreamErrorMsg.
+func (e StreamErrorMsg) Error() string {
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "unknown stream error"
+}
+
 // StreamCmd returns a tea.Cmd that reads from SDK message channel.
 // Call this in a loop to continuously receive messages.
 func StreamCmd(ctx context.Context, ch <-chan claudecode.Message) tea.Cmd {
