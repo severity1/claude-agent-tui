@@ -124,16 +124,17 @@ func main() {
 func printAdaptedMessage(msg any) {
 	switch m := msg.(type) {
 	case adapter.SystemInitMsg:
-		fmt.Printf("[SystemInitMsg] session=%s model=%s cwd=%s tools=%d\n",
-			truncate(m.SessionID, 20), m.Model, truncate(m.Cwd, 30), len(m.Tools))
+		fmt.Printf("[SystemInitMsg] session=%s model=%s cwd=%s permission_mode=%s tools=%v\n",
+			truncate(m.SessionID, 20), m.Model, truncate(m.Cwd, 30), m.PermissionMode, m.Tools)
 
 	case adapter.SystemHookResponseMsg:
-		fmt.Printf("[SystemHookResponseMsg] hook=%s event=%s exit=%d\n",
-			m.HookName, m.HookEvent, m.ExitCode)
+		fmt.Printf("[SystemHookResponseMsg] session=%s hook=%s event=%s exit=%d stdout=%q stderr=%q\n",
+			truncate(m.SessionID, 20), m.HookName, m.HookEvent, m.ExitCode,
+			truncate(m.Stdout, 30), truncate(m.Stderr, 30))
 
 	case adapter.UserMsg:
-		fmt.Printf("[UserMsg] uuid=%s parent=%s\n",
-			truncate(m.UUID, 20), truncate(m.ParentToolUseID, 20))
+		fmt.Printf("[UserMsg] uuid=%s parent=%s content=%v\n",
+			truncate(m.UUID, 20), truncate(m.ParentToolUseID, 20), truncateAny(m.Content, 50))
 
 	case adapter.MessageStartMsg:
 		fmt.Printf("[MessageStartMsg] id=%s model=%s input=%d output=%d\n",
@@ -144,8 +145,8 @@ func printAdaptedMessage(msg any) {
 			m.StopReason, m.InputTokens, m.OutputTokens)
 
 	case adapter.StreamBlockStartMsg:
-		fmt.Printf("[StreamBlockStartMsg] type=%s index=%d tool=%s\n",
-			m.BlockType, m.Index, m.ToolName)
+		fmt.Printf("[StreamBlockStartMsg] type=%s index=%d tool_name=%s tool_id=%s\n",
+			m.BlockType, m.Index, m.ToolName, m.ToolID)
 
 	case adapter.StreamDeltaMsg:
 		fmt.Printf("[StreamDeltaMsg] type=%s index=%d text=%q\n",
@@ -156,8 +157,8 @@ func printAdaptedMessage(msg any) {
 			m.Index, truncate(m.Text, 50))
 
 	case adapter.ToolUseDeltaMsg:
-		fmt.Printf("[ToolUseDeltaMsg] index=%d json=%q\n",
-			m.Index, truncate(m.PartialJSON, 50))
+		fmt.Printf("[ToolUseDeltaMsg] index=%d tool_name=%s tool_id=%s json=%q\n",
+			m.Index, m.ToolName, m.ToolID, truncate(m.PartialJSON, 50))
 
 	case adapter.StreamBlockStopMsg:
 		fmt.Printf("[StreamBlockStopMsg] index=%d\n", m.Index)
@@ -177,8 +178,8 @@ func printAdaptedMessage(msg any) {
 			truncate(m.RequestID, 20), m.Subtype)
 
 	case adapter.ControlResponseMsg:
-		fmt.Printf("[ControlResponseMsg] id=%s success=%v\n",
-			truncate(m.RequestID, 20), m.IsSuccess)
+		fmt.Printf("[ControlResponseMsg] id=%s success=%v error=%q\n",
+			truncate(m.RequestID, 20), m.IsSuccess, m.Error)
 
 	case adapter.StreamErrorMsg:
 		fmt.Printf("[StreamErrorMsg] err=%v\n", m.Err)
@@ -193,6 +194,11 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func truncateAny(v any, max int) string {
+	s := fmt.Sprintf("%v", v)
+	return truncate(s, max)
 }
 
 // Parse functions convert raw JSON to SDK message types
@@ -270,7 +276,7 @@ func parseControlResponse(raw map[string]any) *claudecode.RawControlMessage {
 
 // runValidation tests all adapter message types synthetically
 func runValidation() {
-	fmt.Println("Validating all 16 adapter message types...")
+	fmt.Println("Validating all adapter message types (16 types, 17 test cases)...")
 	fmt.Println()
 
 	passed := 0
@@ -295,7 +301,8 @@ func runValidation() {
 			}(),
 			check: func(m any) bool {
 				msg, ok := m.(adapter.UserMsg)
-				return ok && msg.UUID == "test-uuid" && msg.ParentToolUseID == "test-parent"
+				return ok && msg.UUID == "test-uuid" && msg.ParentToolUseID == "test-parent" &&
+					msg.Content == "test content"
 			},
 		},
 		{
@@ -303,15 +310,17 @@ func runValidation() {
 			sdkMsg: &claudecode.SystemMessage{
 				Subtype: "init",
 				Data: map[string]any{
-					"session_id": "sess-123",
-					"model":      "claude-test",
-					"cwd":        "/test",
-					"tools":      []any{"Read", "Write"},
+					"session_id":      "sess-123",
+					"model":           "claude-test",
+					"cwd":             "/test",
+					"tools":           []any{"Read", "Write"},
+					"permission_mode": "default",
 				},
 			},
 			check: func(m any) bool {
 				msg, ok := m.(adapter.SystemInitMsg)
-				return ok && msg.SessionID == "sess-123" && msg.Model == "claude-test" && len(msg.Tools) == 2
+				return ok && msg.SessionID == "sess-123" && msg.Model == "claude-test" &&
+					len(msg.Tools) == 2 && msg.PermissionMode == "default"
 			},
 		},
 		{
@@ -319,14 +328,19 @@ func runValidation() {
 			sdkMsg: &claudecode.SystemMessage{
 				Subtype: "hook_response",
 				Data: map[string]any{
+					"session_id": "sess-456",
 					"hook_name":  "test-hook",
 					"hook_event": "TestEvent",
-					"exit_code":  float64(0),
+					"stdout":     "hook output",
+					"stderr":     "hook error",
+					"exit_code":  float64(1),
 				},
 			},
 			check: func(m any) bool {
 				msg, ok := m.(adapter.SystemHookResponseMsg)
-				return ok && msg.HookName == "test-hook" && msg.HookEvent == "TestEvent"
+				return ok && msg.SessionID == "sess-456" && msg.HookName == "test-hook" &&
+					msg.HookEvent == "TestEvent" && msg.Stdout == "hook output" &&
+					msg.Stderr == "hook error" && msg.ExitCode == 1
 			},
 		},
 		{
@@ -396,13 +410,14 @@ func runValidation() {
 					"content_block": map[string]any{
 						"type": "tool_use",
 						"name": "Bash",
-						"id":   "tool-123",
+						"id":   "toolu_123abc",
 					},
 				},
 			},
 			check: func(m any) bool {
 				msg, ok := m.(adapter.StreamBlockStartMsg)
-				return ok && msg.BlockType == "tool_use" && msg.ToolName == "Bash" && msg.ToolID == "tool-123"
+				return ok && msg.BlockType == "tool_use" && msg.Index == 0 &&
+					msg.ToolName == "Bash" && msg.ToolID == "toolu_123abc"
 			},
 		},
 		{
@@ -453,6 +468,8 @@ func runValidation() {
 			},
 			check: func(m any) bool {
 				msg, ok := m.(adapter.ToolUseDeltaMsg)
+				// Note: ToolName/ToolID come from content_block_start, not delta events
+				// TUI tracks state to associate them; adapter only provides what's in the event
 				return ok && msg.PartialJSON == `{"cmd":"ls"}` && msg.Index == 1
 			},
 		},
@@ -496,7 +513,7 @@ func runValidation() {
 			},
 		},
 		{
-			name: "ControlResponseMsg",
+			name: "ControlResponseMsg (success)",
 			sdkMsg: &claudecode.RawControlMessage{
 				MessageType: "control_response",
 				Data: map[string]any{
@@ -508,7 +525,24 @@ func runValidation() {
 			},
 			check: func(m any) bool {
 				msg, ok := m.(adapter.ControlResponseMsg)
-				return ok && msg.RequestID == "req-456" && msg.IsSuccess
+				return ok && msg.RequestID == "req-456" && msg.IsSuccess && msg.Error == ""
+			},
+		},
+		{
+			name: "ControlResponseMsg (error)",
+			sdkMsg: &claudecode.RawControlMessage{
+				MessageType: "control_response",
+				Data: map[string]any{
+					"request_id": "req-789",
+					"response": map[string]any{
+						"subtype": "error",
+						"error":   "permission denied",
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.ControlResponseMsg)
+				return ok && msg.RequestID == "req-789" && !msg.IsSuccess && msg.Error == "permission denied"
 			},
 		},
 	}
@@ -546,10 +580,11 @@ func runValidation() {
 	}
 
 	// Summary
+	total := passed + failed
 	fmt.Println()
 	fmt.Println("--- Validation Summary ---")
-	fmt.Printf("  Passed: %d/16\n", passed)
-	fmt.Printf("  Failed: %d/16\n", failed)
+	fmt.Printf("  Passed: %d/%d\n", passed, total)
+	fmt.Printf("  Failed: %d/%d\n", failed, total)
 	if failed == 0 {
 		fmt.Println("  Status: ALL TESTS PASSED")
 	} else {
