@@ -143,30 +143,50 @@ Aggregate findings from all reviewers:
 
 Before presenting results, filter out issues that will be addressed by other MVP GitHub issues:
 
+### Check GitHub Issues First
+
+Query open MVP issues to understand planned work:
+
+```bash
+# List MVP-labeled issues
+gh issue list --label MVP --state open --json number,title,body --limit 50
+
+# Search for specific feature mentions
+gh issue list --search "adapter" --state open --json number,title
+```
+
+Cross-reference review findings against open issues. If a finding is already tracked, note the issue number and filter it.
+
 ### Filtering Criteria
 
 **FILTER OUT** issues that match:
 
-1. **Planned features documented in `docs/`** - Features explicitly marked as planned/future work
+1. **Tracked in GitHub Issues (MVP label)** - Already planned work
+   - Run `gh issue list --label MVP` to get current MVP scope
+   - If finding matches an open issue, note: "Tracked in #123"
+   - Example: "Missing ToolResultMsg" - if Issue #15 covers this, filter out
+
+2. **Planned features documented in `docs/`** - Features explicitly marked as planned/future work
    - Check `docs/ADAPTERS.md`, `docs/ROADMAP.md` for planned components
    - Example: "Missing TaskStartedMsg type" - if documented as planned, filter out
 
-2. **Example/demo code issues** - Issues in `example/` directory that don't affect core library
+3. **Example/demo code issues** - Issues in `example/` directory that don't affect core library
    - Example app is for validation, not production use
    - Filter unless the issue would mislead users about library usage
 
-3. **Documentation-only changes** - Issues about missing docs for planned features
+4. **Documentation-only changes** - Issues about missing docs for planned features
 
-4. **Test infrastructure** - Issues about test helpers that will be added with their features
+5. **Test infrastructure** - Issues about test helpers that will be added with their features
 
 ### How to Filter
 
 For each issue, check:
 ```
-1. Is this in docs/ as planned work? -> FILTER
-2. Is this in example/ and non-critical? -> FILTER
-3. Does this block current branch functionality? -> KEEP
-4. Is this a code quality issue in core library? -> KEEP
+1. Is this tracked in a GitHub MVP issue? -> FILTER (note issue #)
+2. Is this in docs/ as planned work? -> FILTER
+3. Is this in example/ and non-critical? -> FILTER
+4. Does this block current branch functionality? -> KEEP
+5. Is this a code quality issue in core library? -> KEEP
 ```
 
 ### Present Filtered List

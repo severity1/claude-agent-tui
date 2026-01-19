@@ -11,6 +11,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -68,6 +69,7 @@ func main() {
 
 	msgCounts := make(map[string]int)
 	jsonErrors := 0
+	unknownMsgs := 0
 
 	fmt.Println("--- Streaming Messages ---")
 	fmt.Println()
@@ -111,6 +113,10 @@ func main() {
 		adapted := adapter.AdaptMessage(sdkMsg)
 		typeName := fmt.Sprintf("%T", adapted)
 		msgCounts[typeName]++
+		// Track unknown messages as potential issues (SDK version mismatch, etc.)
+		if _, isUnknown := adapted.(adapter.UnknownMessageMsg); isUnknown {
+			unknownMsgs++
+		}
 		printAdaptedMessage(adapted)
 	}
 
@@ -121,7 +127,8 @@ func main() {
 	}
 
 	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			fmt.Fprintf(os.Stderr, "Claude exited with code %d\n", exitErr.ExitCode())
 		} else {
 			fmt.Fprintf(os.Stderr, "Error waiting for claude: %v\n", err)
@@ -138,8 +145,15 @@ func main() {
 	if jsonErrors > 0 {
 		fmt.Printf("  JSON parse errors: %d\n", jsonErrors)
 	}
+	if unknownMsgs > 0 {
+		fmt.Printf("  Unknown message types: %d (adapter may need update)\n", unknownMsgs)
+	}
 
-	if hadError {
+	if hadError || unknownMsgs > 0 {
+		if unknownMsgs > 0 && !hadError {
+			// Unknown messages indicate potential SDK/adapter version mismatch
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }

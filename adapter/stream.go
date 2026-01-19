@@ -78,11 +78,12 @@ type UserMsg struct {
 
 // SystemInitMsg contains session initialization data.
 type SystemInitMsg struct {
-	SessionID      string
-	Model          string
-	Cwd            string
-	Tools          []string
-	PermissionMode string
+	SessionID        string
+	Model            string
+	Cwd              string
+	Tools            []string
+	PermissionMode   string
+	SkippedToolCount int // Count of non-string items skipped when parsing tools array
 }
 
 // SystemHookResponseMsg contains hook execution results.
@@ -250,6 +251,9 @@ func adaptBlockStart(event *claudecode.StreamEvent) tea.Msg {
 }
 
 // adaptBlockDelta handles content_block_delta events.
+// Note: Text fields (text, thinking, partial_json) default to empty string if missing
+// or if the type assertion fails. This is intentional - empty deltas are valid in
+// streaming scenarios, and consumers can check for empty strings if needed.
 func adaptBlockDelta(event *claudecode.StreamEvent) tea.Msg {
 	delta, ok := event.Event["delta"].(map[string]any)
 	if !ok {
@@ -325,6 +329,9 @@ func adaptResultMessage(result *claudecode.ResultMessage) tea.Msg {
 
 // extractIndex extracts the index field from an event map.
 // Returns 0 if the field is missing or not a number.
+// Note: Since 0 is a valid content block index, callers cannot distinguish
+// between "first block" and "missing index" from the return value alone.
+// In practice, the SDK always provides valid indices for stream events.
 func extractIndex(event map[string]any) int {
 	return toInt(event["index"])
 }
@@ -376,13 +383,14 @@ func adaptSystemMessage(msg *claudecode.SystemMessage) tea.Msg {
 
 // adaptSystemInit extracts session initialization data from SystemMessage.
 func adaptSystemInit(msg *claudecode.SystemMessage) tea.Msg {
-	tools, _ := toStringSlice(msg.Data["tools"])
+	tools, skipped := toStringSlice(msg.Data["tools"])
 	return SystemInitMsg{
-		SessionID:      toString(msg.Data["session_id"]),
-		Model:          toString(msg.Data["model"]),
-		Cwd:            toString(msg.Data["cwd"]),
-		Tools:          tools,
-		PermissionMode: toString(msg.Data["permission_mode"]),
+		SessionID:        toString(msg.Data["session_id"]),
+		Model:            toString(msg.Data["model"]),
+		Cwd:              toString(msg.Data["cwd"]),
+		Tools:            tools,
+		PermissionMode:   toString(msg.Data["permission_mode"]),
+		SkippedToolCount: skipped,
 	}
 }
 

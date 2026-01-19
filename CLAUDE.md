@@ -187,6 +187,21 @@ Message events: `message_start`, `message_delta`, `message_stop`
 <!-- MANUAL -->
 ## Custom Notes
 
-Add project-specific notes here. This section is never auto-modified.
+### Search Tools
+Prefer these tools for code exploration:
+
+**ripgrep (rg)** - Fast text search
+```bash
+rg "pattern" --type go              # Search Go files
+rg "StreamEvent" adapter/           # Search in directory
+rg -l "tea.Msg"                     # List files only
+```
+
+**ast-grep** - Structural code search
+```bash
+ast-grep --pattern 'func $NAME($$$) tea.Msg { $$$ }' --lang go    # Find tea.Msg functions
+ast-grep --pattern 'type $NAME struct { $$$ }' --lang go          # Find struct definitions
+ast-grep --pattern 't.Run($NAME, func($$$) { $$$ })' --lang go    # Find subtests
+```
 
 <!-- END MANUAL -->

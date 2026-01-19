@@ -431,6 +431,36 @@ func TestAdaptMessage_StreamEvent_ContentBlockStart_ToolUse(t *testing.T) {
 	}
 }
 
+func TestAdaptMessage_StreamEvent_ContentBlockStart_ToolUse_NonStringFields(t *testing.T) {
+	// Test that non-string values for name/id default to empty string
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type":  claudecode.StreamEventTypeContentBlockStart,
+			"index": float64(1),
+			"content_block": map[string]any{
+				"type": "tool_use",
+				"name": 12345,       // int instead of string
+				"id":   []int{1, 2}, // slice instead of string
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	msg, ok := result.(adapter.StreamBlockStartMsg)
+	if !ok {
+		t.Fatalf("expected StreamBlockStartMsg, got %T", result)
+	}
+
+	// Should default to empty strings when type assertion fails
+	if msg.ToolName != "" {
+		t.Errorf("ToolName = %q, want empty string for non-string value", msg.ToolName)
+	}
+	if msg.ToolID != "" {
+		t.Errorf("ToolID = %q, want empty string for non-string value", msg.ToolID)
+	}
+}
+
 func TestAdaptMessage_StreamEvent_ContentBlockStop(t *testing.T) {
 	event := &claudecode.StreamEvent{
 		Event: map[string]any{
