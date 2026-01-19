@@ -228,7 +228,11 @@ func adaptBlockStart(event *claudecode.StreamEvent) tea.Msg {
 		return UnknownMessageMsg{TypeName: "StreamEvent/content_block_start/missing-content_block"}
 	}
 
-	blockType, _ := contentBlock["type"].(string)
+	blockType, ok := contentBlock["type"].(string)
+	if !ok || blockType == "" {
+		return UnknownMessageMsg{TypeName: "StreamEvent/content_block_start/missing-block-type"}
+	}
+
 	index := extractIndex(event.Event)
 
 	msg := StreamBlockStartMsg{

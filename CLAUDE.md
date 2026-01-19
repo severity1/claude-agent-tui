@@ -123,7 +123,7 @@ The adapter converts SDK messages to TUI-specific message types:
 ### Error Handling Pattern
 - Never return nil for unrecognized message types
 - Return `UnknownMessageMsg` with descriptive `TypeName` field for debugging
-- TypeName format examples: `"StreamEvent/nil"`, `"StreamEvent/unknown_event"`, `"SystemMessage/unknown_subtype"`
+- TypeName format examples: `"nil"`, `"StreamEvent/nil"`, `"StreamEvent/unknown_event_type"`, `"SystemMessage/unknown_subtype"`, `"StreamEvent/content_block_delta/missing-delta"`
 - Pattern: Fail informatively with context, not silently
 
 ### Stream Event Types

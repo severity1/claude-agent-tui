@@ -101,10 +101,6 @@ func main() {
 
 		// Adapt and display
 		adapted := adapter.AdaptMessage(sdkMsg)
-		if adapted == nil {
-			fmt.Fprintf(os.Stderr, "[WARN] AdaptMessage returned nil for type=%s\n", msgType)
-			continue
-		}
 		typeName := fmt.Sprintf("%T", adapted)
 		msgCounts[typeName]++
 		printAdaptedMessage(adapted)
@@ -569,12 +565,6 @@ func runValidation() {
 	// Run all tests
 	for _, tt := range tests {
 		adapted := adapter.AdaptMessage(tt.sdkMsg)
-		if adapted == nil {
-			fmt.Printf("  FAIL: %s - AdaptMessage returned nil\n", tt.name)
-			failed++
-			continue
-		}
-
 		if tt.check(adapted) {
 			fmt.Printf("  PASS: %s\n", tt.name)
 			printAdaptedMessage(adapted)

@@ -1651,3 +1651,73 @@ func TestAdaptMessage_DefaultCase_UnknownType(t *testing.T) {
 		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "*adapter_test.mockMessage")
 	}
 }
+
+// ============================================================================
+// Additional Edge Case Tests (from code review)
+// ============================================================================
+
+func TestAdaptMessage_StreamEvent_ContentBlockStart_MissingBlockType(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type":  claudecode.StreamEventTypeContentBlockStart,
+			"index": float64(0),
+			"content_block": map[string]any{
+				// type field is missing
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for missing block type, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_start/missing-block-type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_start/missing-block-type")
+	}
+}
+
+func TestAdaptMessage_StreamEvent_ContentBlockStart_EmptyBlockType(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type":  claudecode.StreamEventTypeContentBlockStart,
+			"index": float64(0),
+			"content_block": map[string]any{
+				"type": "", // empty string
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for empty block type, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_start/missing-block-type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_start/missing-block-type")
+	}
+}
+
+func TestAdaptMessage_StreamEvent_ContentBlockStart_NonStringBlockType(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type":  claudecode.StreamEventTypeContentBlockStart,
+			"index": float64(0),
+			"content_block": map[string]any{
+				"type": 123, // wrong type - number instead of string
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for non-string block type, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_start/missing-block-type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_start/missing-block-type")
+	}
+}
