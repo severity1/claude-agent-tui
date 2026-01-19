@@ -166,9 +166,14 @@ Message events: `message_start`, `message_delta`, `message_stop`
 
 ### Type Extraction Helpers
 - `toInt(v any)`: Handles int, float64, int64 (JSON decodes numbers as float64)
-- `toString(v any)`: Safe string extraction
+- `toString(v any)`: Safe string extraction, returns empty string for non-string types
 - `getStringField(m map[string]any, key string)`: Safe map field extraction, returns empty string if missing or wrong type
-- `toStringSlice(v any) ([]string, int)`: Convert `[]any` to `[]string`, returns skipped count for error detection
+- `toStringSlice(v any) ([]string, int)`: Convert `[]any` to `[]string`, returns (result, skippedCount) for error detection
+
+### Validation and Diagnostics
+- `SystemInitMsg.SkippedToolCount`: Tracks non-string items skipped when parsing tools array from SDK
+- Example app exit codes: 0 (success), 1 (execution error), 2 (unknown messages detected, SDK version mismatch)
+- Empty deltas are valid in streaming scenarios (consumers should check for empty strings if needed)
 
 <!-- END AUTO-MANAGED -->
 
