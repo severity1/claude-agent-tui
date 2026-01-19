@@ -1,0 +1,28 @@
+defaultMaxIterations: 5
+
+ralphWrapper: |
+  /ralph-loop:ralph-loop --max-iterations 5 --completion-promise "COMPLETE" "{task}
+
+  When complete, ALL of the following must be true:
+
+  ## Core Quality Gates
+  - Build succeeds (make build)
+  - All unit tests pass (make test)
+  - Code is properly formatted (make fmt)
+  - Static analysis passes (make vet)
+  - Complexity and coverage lint passes (make lint)
+
+  ## Static Analysis
+  - No race conditions detected (make test-race)
+  - Cyclomatic complexity under threshold of 15 (make lint-complexity)
+  - Adapter package has 90%+ test coverage (make lint-coverage)
+
+  ## Additional Tests
+  - TUI golden file tests pass (make test-tui)
+  - No unused dependencies (go mod tidy produces no changes)
+
+  ## Available Review Tools
+  - /tdd-review for comprehensive code review
+  - Specialized agents: tui-component-reviewer, sdk-adapter-reviewer, grumpy-gopher
+
+  Output <promise>COMPLETE</promise> when ALL criteria above are satisfied."
