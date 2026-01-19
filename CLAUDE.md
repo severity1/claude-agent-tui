@@ -123,7 +123,24 @@ The adapter converts SDK messages to TUI-specific message types:
 ### Error Handling Pattern
 - Never return nil for unrecognized message types
 - Return `UnknownMessageMsg` with descriptive `TypeName` field for debugging
-- TypeName format examples: `"nil"`, `"StreamEvent/nil"`, `"StreamEvent/unknown_event_type"`, `"SystemMessage/unknown_subtype"`, `"StreamEvent/content_block_delta/missing-delta"`
+- TypeName format examples:
+  - `"nil"` - nil message input
+  - `"%T"` - unknown message type (e.g., `"*claudecode.UnknownType"`)
+  - `"StreamEvent/nil"` - nil StreamEvent or Event field
+  - `"StreamEvent/non-string-type:%T"` - Event type field is not a string
+  - `"StreamEvent/{event_type}"` - unknown event type
+  - `"StreamEvent/content_block_start/missing-content_block"` - missing required field
+  - `"StreamEvent/content_block_start/missing-block-type"` - missing block type
+  - `"StreamEvent/content_block_delta/missing-delta"` - missing delta field
+  - `"StreamEvent/content_block_delta/missing-delta-type"` - missing delta type
+  - `"StreamEvent/content_block_delta/{delta_type}"` - unknown delta type
+  - `"StreamEvent/message_start/missing-message"` - missing message field
+  - `"StreamEvent/message_delta/missing-delta"` - missing delta field
+  - `"UserMessage/nil"` - nil UserMessage
+  - `"SystemMessage/nil"` - nil SystemMessage
+  - `"SystemMessage/{subtype}"` - unknown SystemMessage subtype
+  - `"RawControlMessage/nil"` - nil RawControlMessage
+  - `"RawControlMessage/{message_type}"` - unknown control message type
 - Pattern: Fail informatively with context, not silently
 
 ### Stream Event Types
