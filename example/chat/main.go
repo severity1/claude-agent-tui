@@ -19,6 +19,12 @@ import (
 	"github.com/severity1/claude-agent-tui/adapter"
 )
 
+// Buffer size constants for scanner.
+const (
+	initialBufSize = 64 * 1024   // 64KB initial buffer
+	maxBufSize     = 1024 * 1024 // 1MB max buffer for large JSON messages
+)
+
 func main() {
 	fmt.Println("Stream Adapter Validation Example")
 	fmt.Println("==================================")
@@ -57,10 +63,11 @@ func main() {
 
 	scanner := bufio.NewScanner(stdout)
 	// Increase buffer size for large messages
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	buf := make([]byte, 0, initialBufSize)
+	scanner.Buffer(buf, maxBufSize)
 
 	msgCounts := make(map[string]int)
+	jsonErrors := 0
 
 	fmt.Println("--- Streaming Messages ---")
 	fmt.Println()
@@ -72,6 +79,7 @@ func main() {
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] JSON parse error: %v (line: %s)\n", err, truncate(line, 80))
+			jsonErrors++
 			continue
 		}
 
@@ -126,6 +134,9 @@ func main() {
 	fmt.Println("--- Message Type Summary ---")
 	for t, count := range msgCounts {
 		fmt.Printf("  %s: %d\n", t, count)
+	}
+	if jsonErrors > 0 {
+		fmt.Printf("  JSON parse errors: %d\n", jsonErrors)
 	}
 
 	if hadError {
@@ -197,7 +208,7 @@ func printAdaptedMessage(msg any) {
 		fmt.Printf("[StreamErrorMsg] err=%v\n", m.Err)
 
 	case adapter.UnknownMessageMsg:
-		fmt.Printf("[UnknownMessageMsg] type=%s\n", m.TypeName)
+		fmt.Fprintf(os.Stderr, "[WARN] [UnknownMessageMsg] type=%s\n", m.TypeName)
 
 	default:
 		fmt.Printf("[%T] %+v\n", m, m)

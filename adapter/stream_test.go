@@ -1659,8 +1659,8 @@ func TestAdaptMessage_DefaultCase_UnknownType(t *testing.T) {
 func TestAdaptMessage_StreamEvent_ContentBlockStart_MissingBlockType(t *testing.T) {
 	event := &claudecode.StreamEvent{
 		Event: map[string]any{
-			"type":  claudecode.StreamEventTypeContentBlockStart,
-			"index": float64(0),
+			"type":          claudecode.StreamEventTypeContentBlockStart,
+			"index":         float64(0),
 			"content_block": map[string]any{
 				// type field is missing
 			},
