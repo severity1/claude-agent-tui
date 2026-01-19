@@ -194,12 +194,12 @@ func AdaptMessage(msg claudecode.Message) tea.Msg {
 // based on the event type.
 func adaptStreamEvent(event *claudecode.StreamEvent) tea.Msg {
 	if event == nil || event.Event == nil {
-		return nil
+		return UnknownMessageMsg{TypeName: "StreamEvent/nil"}
 	}
 
 	eventType, ok := event.Event["type"].(string)
 	if !ok {
-		return nil
+		return UnknownMessageMsg{TypeName: fmt.Sprintf("StreamEvent/non-string-type:%T", event.Event["type"])}
 	}
 
 	switch eventType {
@@ -216,7 +216,7 @@ func adaptStreamEvent(event *claudecode.StreamEvent) tea.Msg {
 	case claudecode.StreamEventTypeMessageStop:
 		return StreamDoneMsg{}
 	default:
-		return nil
+		return UnknownMessageMsg{TypeName: fmt.Sprintf("StreamEvent/%s", eventType)}
 	}
 }
 
@@ -224,7 +224,7 @@ func adaptStreamEvent(event *claudecode.StreamEvent) tea.Msg {
 func adaptBlockStart(event *claudecode.StreamEvent) tea.Msg {
 	contentBlock, ok := event.Event["content_block"].(map[string]any)
 	if !ok {
-		return nil
+		return UnknownMessageMsg{TypeName: "StreamEvent/content_block_start/missing-content_block"}
 	}
 
 	blockType, _ := contentBlock["type"].(string)
@@ -252,12 +252,12 @@ func adaptBlockStart(event *claudecode.StreamEvent) tea.Msg {
 func adaptBlockDelta(event *claudecode.StreamEvent) tea.Msg {
 	delta, ok := event.Event["delta"].(map[string]any)
 	if !ok {
-		return nil
+		return UnknownMessageMsg{TypeName: "StreamEvent/content_block_delta/missing-delta"}
 	}
 
 	deltaType, ok := delta["type"].(string)
 	if !ok {
-		return nil
+		return UnknownMessageMsg{TypeName: "StreamEvent/content_block_delta/missing-delta-type"}
 	}
 
 	index := extractIndex(event.Event)
@@ -286,7 +286,7 @@ func adaptBlockDelta(event *claudecode.StreamEvent) tea.Msg {
 		}
 
 	default:
-		return nil
+		return UnknownMessageMsg{TypeName: fmt.Sprintf("StreamEvent/content_block_delta/%s", deltaType)}
 	}
 }
 
@@ -346,7 +346,7 @@ func toInt(v any) int {
 // adaptUserMessage converts a UserMessage to UserMsg.
 func adaptUserMessage(msg *claudecode.UserMessage) tea.Msg {
 	if msg == nil {
-		return nil
+		return UnknownMessageMsg{TypeName: "UserMessage/nil"}
 	}
 
 	return UserMsg{
@@ -360,7 +360,7 @@ func adaptUserMessage(msg *claudecode.UserMessage) tea.Msg {
 // based on the subtype.
 func adaptSystemMessage(msg *claudecode.SystemMessage) tea.Msg {
 	if msg == nil {
-		return nil
+		return UnknownMessageMsg{TypeName: "SystemMessage/nil"}
 	}
 
 	switch msg.Subtype {
@@ -369,7 +369,7 @@ func adaptSystemMessage(msg *claudecode.SystemMessage) tea.Msg {
 	case "hook_response":
 		return adaptHookResponse(msg)
 	default:
-		return nil
+		return UnknownMessageMsg{TypeName: fmt.Sprintf("SystemMessage/%s", msg.Subtype)}
 	}
 }
 
@@ -400,7 +400,7 @@ func adaptHookResponse(msg *claudecode.SystemMessage) tea.Msg {
 func adaptMessageStart(event *claudecode.StreamEvent) tea.Msg {
 	message, ok := event.Event["message"].(map[string]any)
 	if !ok {
-		return nil
+		return UnknownMessageMsg{TypeName: "StreamEvent/message_start/missing-message"}
 	}
 
 	msg := MessageStartMsg{
@@ -438,7 +438,7 @@ func adaptMessageDelta(event *claudecode.StreamEvent) tea.Msg {
 // adaptControlMessage converts a RawControlMessage to the appropriate tea.Msg.
 func adaptControlMessage(msg *claudecode.RawControlMessage) tea.Msg {
 	if msg == nil {
-		return nil
+		return UnknownMessageMsg{TypeName: "RawControlMessage/nil"}
 	}
 
 	switch msg.MessageType {
@@ -447,7 +447,7 @@ func adaptControlMessage(msg *claudecode.RawControlMessage) tea.Msg {
 	case claudecode.MessageTypeControlResponse:
 		return adaptControlResponse(msg)
 	default:
-		return nil
+		return UnknownMessageMsg{TypeName: fmt.Sprintf("RawControlMessage/%s", msg.MessageType)}
 	}
 }
 

@@ -531,8 +531,12 @@ func TestAdaptMessage_StreamEvent_EmptyEvent(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for empty Event, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for empty Event, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/non-string-type:<nil>" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/non-string-type:<nil>")
 	}
 }
 
@@ -545,8 +549,12 @@ func TestAdaptMessage_StreamEvent_UnknownEventType(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for unknown event type, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for unknown event type, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/unknown_event_type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/unknown_event_type")
 	}
 }
 
@@ -561,8 +569,12 @@ func TestAdaptMessage_StreamEvent_MissingDelta(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for missing delta, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for missing delta, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_delta/missing-delta" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_delta/missing-delta")
 	}
 }
 
@@ -579,8 +591,12 @@ func TestAdaptMessage_StreamEvent_UnknownDeltaType(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for unknown delta type, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for unknown delta type, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_delta/unknown_delta_type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_delta/unknown_delta_type")
 	}
 }
 
@@ -595,8 +611,12 @@ func TestAdaptMessage_StreamEvent_MissingContentBlock(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for missing content_block, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for missing content_block, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_start/missing-content_block" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_start/missing-content_block")
 	}
 }
 
@@ -861,8 +881,12 @@ func TestAdaptMessage_UserMessage_Nil(t *testing.T) {
 
 	result := adapter.AdaptMessage(userMsg)
 
-	if result != nil {
-		t.Errorf("expected nil for nil UserMessage, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for nil UserMessage, got %T", result)
+	}
+	if unknownMsg.TypeName != "UserMessage/nil" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "UserMessage/nil")
 	}
 }
 
@@ -989,8 +1013,12 @@ func TestAdaptMessage_SystemMessage_Nil(t *testing.T) {
 
 	result := adapter.AdaptMessage(sysMsg)
 
-	if result != nil {
-		t.Errorf("expected nil for nil SystemMessage, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for nil SystemMessage, got %T", result)
+	}
+	if unknownMsg.TypeName != "SystemMessage/nil" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "SystemMessage/nil")
 	}
 }
 
@@ -1002,8 +1030,12 @@ func TestAdaptMessage_SystemMessage_EmptySubtype(t *testing.T) {
 
 	result := adapter.AdaptMessage(sysMsg)
 
-	if result != nil {
-		t.Errorf("expected nil for empty subtype, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for empty subtype, got %T", result)
+	}
+	if unknownMsg.TypeName != "SystemMessage/" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "SystemMessage/")
 	}
 }
 
@@ -1015,8 +1047,12 @@ func TestAdaptMessage_SystemMessage_UnknownSubtype(t *testing.T) {
 
 	result := adapter.AdaptMessage(sysMsg)
 
-	if result != nil {
-		t.Errorf("expected nil for unknown subtype, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for unknown subtype, got %T", result)
+	}
+	if unknownMsg.TypeName != "SystemMessage/unknown_subtype" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "SystemMessage/unknown_subtype")
 	}
 }
 
@@ -1236,8 +1272,12 @@ func TestAdaptMessage_StreamEvent_MessageStart_MissingMessage(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for missing message field, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for missing message field, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/message_start/missing-message" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/message_start/missing-message")
 	}
 }
 
@@ -1485,8 +1525,12 @@ func TestAdaptMessage_ControlMessage_Nil(t *testing.T) {
 
 	result := adapter.AdaptMessage(ctrlMsg)
 
-	if result != nil {
-		t.Errorf("expected nil for nil RawControlMessage, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for nil RawControlMessage, got %T", result)
+	}
+	if unknownMsg.TypeName != "RawControlMessage/nil" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "RawControlMessage/nil")
 	}
 }
 
@@ -1498,8 +1542,12 @@ func TestAdaptMessage_ControlMessage_UnknownType(t *testing.T) {
 
 	result := adapter.AdaptMessage(ctrlMsg)
 
-	if result != nil {
-		t.Errorf("expected nil for unknown control message type, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for unknown control message type, got %T", result)
+	}
+	if unknownMsg.TypeName != "RawControlMessage/unknown_control_type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "RawControlMessage/unknown_control_type")
 	}
 }
 
@@ -1514,8 +1562,12 @@ func TestAdaptMessage_StreamEvent_NilEvent(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for nil Event field, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for nil Event field, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/nil" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/nil")
 	}
 }
 
@@ -1524,8 +1576,12 @@ func TestAdaptMessage_StreamEvent_NilStreamEvent(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for nil StreamEvent, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for nil StreamEvent, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/nil" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/nil")
 	}
 }
 
@@ -1543,8 +1599,12 @@ func TestAdaptMessage_StreamEvent_ContentBlockDelta_MissingDeltaType(t *testing.
 
 	result := adapter.AdaptMessage(event)
 
-	if result != nil {
-		t.Errorf("expected nil for missing delta type, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for missing delta type, got %T", result)
+	}
+	if unknownMsg.TypeName != "StreamEvent/content_block_delta/missing-delta-type" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/content_block_delta/missing-delta-type")
 	}
 }
 
