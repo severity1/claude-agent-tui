@@ -8,6 +8,13 @@ Reusable TUI components for building Claude Code interfaces with the Charmbracel
 
 ## Features
 
+### Implemented
+
+- **Stream Adapter** - Converts SDK messages to Bubble Tea messages with 16+ message types
+- **Validation Example** - Demonstrates all adapter message types with live and synthetic modes
+
+### Planned
+
 - **Component Library** - 27+ reusable Bubble Tea components
 - **Multiple Variants** - Each component supports multiple display modes (fullscreen, modal, inline, etc.)
 - **Theme System** - 12 built-in themes including Catppuccin, Dracula, Nord, High Contrast, and more
@@ -27,16 +34,16 @@ The library uses a layered architecture:
 ┌─────────────────────────────────────────────────────────────┐
 │                      Your Application                        │
 ├─────────────────────────────────────────────────────────────┤
-│  layout/          High-level composite screens               │
+│  layout/          High-level composite screens     [PLANNED] │
 │  ├── chat/        Full chat interface                       │
 │  └── agent/       Agent dashboard with tools view           │
 ├─────────────────────────────────────────────────────────────┤
-│  component/       Low-level Bubble Tea components            │
+│  component/       Low-level Bubble Tea components  [PLANNED] │
 │  ├── output/      StreamText, Message, Thinking, ToolUse... │
 │  ├── input/       ChatInput, Permission, Question, Todo...  │
 │  └── shared/      Button, Chip, Card, Overlay               │
 ├─────────────────────────────────────────────────────────────┤
-│  system/          Cross-cutting systems                      │
+│  system/          Cross-cutting systems            [PLANNED] │
 │  ├── theme/       Theming engine with built-in themes       │
 │  ├── animation/   Spring-based animations                   │
 │  ├── keymap/      Keybinding management                     │
@@ -47,15 +54,15 @@ The library uses a layered architecture:
 │  └── accessibility/ Screen reader and reduced motion        │
 ├─────────────────────────────────────────────────────────────┤
 │  adapter/         SDK integration layer                      │
-│  ├── stream.go    StreamEvent -> tea.Msg                    │
-│  ├── control.go   canUseTool -> input prompts               │
-│  └── client.go    Client lifecycle management               │
+│  ├── stream.go    StreamEvent -> tea.Msg       [IMPLEMENTED] │
+│  ├── control.go   canUseTool -> input prompts      [PLANNED] │
+│  └── client.go    Client lifecycle management      [PLANNED] │
 ├─────────────────────────────────────────────────────────────┤
 │  claude-agent-sdk-go                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Components
+## Components (Planned)
 
 ### Output Components
 
@@ -99,7 +106,7 @@ The library uses a layered architecture:
 | `Card` | Container with border |
 | `Overlay` | Modal backdrop wrapper |
 
-## Themes
+## Themes (Planned)
 
 Built-in themes with light/dark variants:
 
@@ -126,7 +133,9 @@ input := chatinput.New(
 )
 ```
 
-## Quick Start
+## Quick Start (Planned)
+
+The full chat interface is planned for future implementation:
 
 ```go
 package main
@@ -157,7 +166,105 @@ func main() {
 }
 ```
 
-## Keybindings
+## Using the Stream Adapter (Implemented)
+
+The stream adapter converts SDK messages to Bubble Tea messages, enabling reactive TUI updates:
+
+```go
+package main
+
+import (
+    "context"
+
+    tea "github.com/charmbracelet/bubbletea"
+    "github.com/severity1/claude-agent-tui/adapter"
+    claudecode "github.com/severity1/claude-agent-sdk-go"
+)
+
+type Model struct {
+    client   *claudecode.Client
+    messages chan any
+    ctx      context.Context
+    content  string
+}
+
+func (m Model) Init() tea.Cmd {
+    // Start streaming SDK messages
+    return adapter.StreamCmd(m.ctx, m.messages)
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+    case adapter.StreamDeltaMsg:
+        // Incremental text content
+        m.content += msg.Delta
+        return m, adapter.StreamCmd(m.ctx, m.messages)
+
+    case adapter.StreamBlockStartMsg:
+        // New content block (text, thinking, tool_use)
+        if msg.BlockType == adapter.BlockTypeToolUse {
+            // Tool use started: msg.ToolName, msg.ToolID
+        }
+        return m, adapter.StreamCmd(m.ctx, m.messages)
+
+    case adapter.ThinkingDeltaMsg:
+        // Extended thinking content
+        return m, adapter.StreamCmd(m.ctx, m.messages)
+
+    case adapter.ToolUseDeltaMsg:
+        // Incremental tool input JSON
+        return m, adapter.StreamCmd(m.ctx, m.messages)
+
+    case adapter.ResultMsg:
+        // Final result with usage stats
+        // msg.InputTokens, msg.OutputTokens, msg.CacheReadTokens
+        return m, nil
+
+    case adapter.StreamDoneMsg:
+        // Stream completed
+        return m, nil
+
+    case adapter.StreamErrorMsg:
+        // Handle error: msg.Err
+        return m, nil
+    }
+    return m, nil
+}
+```
+
+### Adapter Message Types
+
+| Message Type | Purpose |
+|--------------|---------|
+| `StreamDeltaMsg` | Incremental text content |
+| `StreamBlockStartMsg` | New content block (text, thinking, tool_use) |
+| `StreamBlockStopMsg` | Content block completion |
+| `ThinkingDeltaMsg` | Incremental extended thinking |
+| `ToolUseDeltaMsg` | Incremental tool input JSON |
+| `MessageStartMsg` | Initial message metadata with model info |
+| `MessageDeltaMsg` | Final usage stats and stop reason |
+| `AssistantMsg` | Complete assistant message |
+| `ResultMsg` | Final result with usage statistics |
+| `UserMsg` | User message (typically tool results) |
+| `SystemInitMsg` | Session initialization data |
+| `SystemHookResponseMsg` | Hook execution results |
+| `ControlRequestMsg` | Control protocol request |
+| `ControlResponseMsg` | Control protocol response |
+| `StreamDoneMsg` | Stream completion signal |
+| `StreamErrorMsg` | Stream error with context |
+| `UnknownMessageMsg` | Unrecognized message (for debugging) |
+
+### Running the Validation Example
+
+```bash
+# Run with a prompt (live mode - requires Claude CLI)
+go run example/chat/main.go "Hello, Claude!"
+
+# Run validation mode (tests all message types synthetically)
+go run example/chat/main.go --validate
+```
+
+## Keybindings (Planned)
 
 Default keybindings use vim-style navigation:
 
@@ -183,7 +290,7 @@ km.Set("quit", "ctrl+q")
 km.Set("allow", "a", "y", "enter")
 ```
 
-## Accessibility
+## Accessibility (Planned)
 
 Built-in accessibility support controlled via environment variables:
 
@@ -200,7 +307,7 @@ All components support:
 - Color-blindness safe design (symbols alongside colors)
 - Screen reader announcements for state changes
 
-## Error Recovery
+## Error Recovery (Planned)
 
 Automatic error recovery with exponential backoff:
 
@@ -224,7 +331,7 @@ Features:
 - User notification of connection state
 - Manual retry option when auto-recovery fails
 
-## Session Management
+## Session Management (Planned)
 
 Persist and resume conversations:
 
@@ -271,7 +378,16 @@ data, _ := mgr.Export(sessionID, session.ExportMarkdown)
 
 ## Status
 
-This project is in the planning phase. See [ROADMAP.md](docs/ROADMAP.md) for implementation timeline.
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Stream Adapter** | Implemented | Converts SDK messages to Bubble Tea messages |
+| **Validation Example** | Implemented | Demonstrates all 16+ message types |
+| **Control Adapter** | Planned | Tool permission callbacks |
+| **Client Adapter** | Planned | SDK client lifecycle |
+| **TUI Components** | Planned | See component tables above |
+| **System Packages** | Planned | Theme, animation, keymap, etc. |
+
+See [ROADMAP.md](docs/ROADMAP.md) for implementation phases.
 
 ## License
 
