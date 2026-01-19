@@ -807,3 +807,796 @@ func TestAdaptMessage_StreamEvent_MissingIndex(t *testing.T) {
 		t.Errorf("Index = %d, want 0 for missing index", msg.Index)
 	}
 }
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - UserMsg
+// ============================================================================
+
+func TestUserMsg_Fields(t *testing.T) {
+	msg := adapter.UserMsg{
+		UUID:            "uuid-123",
+		Content:         "Hello, Claude!",
+		ParentToolUseID: "tool-456",
+	}
+
+	if msg.UUID != "uuid-123" {
+		t.Errorf("UUID = %q, want %q", msg.UUID, "uuid-123")
+	}
+	if msg.Content != "Hello, Claude!" {
+		t.Errorf("Content = %v, want %q", msg.Content, "Hello, Claude!")
+	}
+	if msg.ParentToolUseID != "tool-456" {
+		t.Errorf("ParentToolUseID = %q, want %q", msg.ParentToolUseID, "tool-456")
+	}
+}
+
+func TestAdaptMessage_UserMessage(t *testing.T) {
+	uuid := "user-msg-uuid"
+	userMsg := &claudecode.UserMessage{
+		Content: "Hello from user",
+		UUID:    &uuid,
+	}
+
+	result := adapter.AdaptMessage(userMsg)
+
+	msg, ok := result.(adapter.UserMsg)
+	if !ok {
+		t.Fatalf("expected UserMsg, got %T", result)
+	}
+
+	if msg.UUID != "user-msg-uuid" {
+		t.Errorf("UUID = %q, want %q", msg.UUID, "user-msg-uuid")
+	}
+	if msg.Content != "Hello from user" {
+		t.Errorf("Content = %v, want %q", msg.Content, "Hello from user")
+	}
+}
+
+func TestAdaptMessage_UserMessage_WithParentToolUseID(t *testing.T) {
+	uuid := "user-msg-uuid"
+	parentID := "parent-tool-123"
+	userMsg := &claudecode.UserMessage{
+		Content:         "Tool result content",
+		UUID:            &uuid,
+		ParentToolUseID: &parentID,
+	}
+
+	result := adapter.AdaptMessage(userMsg)
+
+	msg, ok := result.(adapter.UserMsg)
+	if !ok {
+		t.Fatalf("expected UserMsg, got %T", result)
+	}
+
+	if msg.ParentToolUseID != "parent-tool-123" {
+		t.Errorf("ParentToolUseID = %q, want %q", msg.ParentToolUseID, "parent-tool-123")
+	}
+}
+
+func TestAdaptMessage_UserMessage_Nil(t *testing.T) {
+	var userMsg *claudecode.UserMessage = nil
+
+	result := adapter.AdaptMessage(userMsg)
+
+	if result != nil {
+		t.Errorf("expected nil for nil UserMessage, got %T", result)
+	}
+}
+
+func TestAdaptMessage_UserMessage_NilFields(t *testing.T) {
+	userMsg := &claudecode.UserMessage{
+		Content:         "Test content",
+		UUID:            nil, // nil UUID
+		ParentToolUseID: nil, // nil ParentToolUseID
+	}
+
+	result := adapter.AdaptMessage(userMsg)
+
+	msg, ok := result.(adapter.UserMsg)
+	if !ok {
+		t.Fatalf("expected UserMsg, got %T", result)
+	}
+
+	if msg.UUID != "" {
+		t.Errorf("UUID = %q, want empty string for nil UUID", msg.UUID)
+	}
+	if msg.ParentToolUseID != "" {
+		t.Errorf("ParentToolUseID = %q, want empty string for nil ParentToolUseID", msg.ParentToolUseID)
+	}
+}
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - SystemInitMsg
+// ============================================================================
+
+func TestSystemInitMsg_Fields(t *testing.T) {
+	msg := adapter.SystemInitMsg{
+		SessionID:      "session-abc",
+		Model:          "claude-sonnet-4-20250514",
+		Cwd:            "/home/user/project",
+		Tools:          []string{"Read", "Write", "Bash"},
+		PermissionMode: "default",
+	}
+
+	if msg.SessionID != "session-abc" {
+		t.Errorf("SessionID = %q, want %q", msg.SessionID, "session-abc")
+	}
+	if msg.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model = %q, want %q", msg.Model, "claude-sonnet-4-20250514")
+	}
+	if msg.Cwd != "/home/user/project" {
+		t.Errorf("Cwd = %q, want %q", msg.Cwd, "/home/user/project")
+	}
+	if len(msg.Tools) != 3 || msg.Tools[0] != "Read" {
+		t.Errorf("Tools = %v, want [Read Write Bash]", msg.Tools)
+	}
+	if msg.PermissionMode != "default" {
+		t.Errorf("PermissionMode = %q, want %q", msg.PermissionMode, "default")
+	}
+}
+
+func TestAdaptMessage_SystemMessage_Init(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "init",
+		Data: map[string]any{
+			"session_id":      "sess-123",
+			"model":           "claude-sonnet-4-20250514",
+			"cwd":             "/workspace",
+			"tools":           []any{"Bash", "Read", "Write"},
+			"permission_mode": "default",
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemInitMsg)
+	if !ok {
+		t.Fatalf("expected SystemInitMsg, got %T", result)
+	}
+
+	if msg.SessionID != "sess-123" {
+		t.Errorf("SessionID = %q, want %q", msg.SessionID, "sess-123")
+	}
+	if msg.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model = %q, want %q", msg.Model, "claude-sonnet-4-20250514")
+	}
+	if msg.Cwd != "/workspace" {
+		t.Errorf("Cwd = %q, want %q", msg.Cwd, "/workspace")
+	}
+	if len(msg.Tools) != 3 {
+		t.Errorf("Tools len = %d, want 3", len(msg.Tools))
+	}
+	if msg.PermissionMode != "default" {
+		t.Errorf("PermissionMode = %q, want %q", msg.PermissionMode, "default")
+	}
+}
+
+func TestAdaptMessage_SystemMessage_Init_PartialFields(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "init",
+		Data: map[string]any{
+			"session_id": "sess-456",
+			// Missing model, cwd, tools, permission_mode
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemInitMsg)
+	if !ok {
+		t.Fatalf("expected SystemInitMsg, got %T", result)
+	}
+
+	if msg.SessionID != "sess-456" {
+		t.Errorf("SessionID = %q, want %q", msg.SessionID, "sess-456")
+	}
+	if msg.Model != "" {
+		t.Errorf("Model = %q, want empty string", msg.Model)
+	}
+	if msg.Cwd != "" {
+		t.Errorf("Cwd = %q, want empty string", msg.Cwd)
+	}
+	if msg.Tools != nil && len(msg.Tools) != 0 {
+		t.Errorf("Tools = %v, want nil or empty", msg.Tools)
+	}
+}
+
+func TestAdaptMessage_SystemMessage_Nil(t *testing.T) {
+	var sysMsg *claudecode.SystemMessage = nil
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	if result != nil {
+		t.Errorf("expected nil for nil SystemMessage, got %T", result)
+	}
+}
+
+func TestAdaptMessage_SystemMessage_EmptySubtype(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "",
+		Data:    map[string]any{},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	if result != nil {
+		t.Errorf("expected nil for empty subtype, got %T", result)
+	}
+}
+
+func TestAdaptMessage_SystemMessage_UnknownSubtype(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "unknown_subtype",
+		Data:    map[string]any{},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	if result != nil {
+		t.Errorf("expected nil for unknown subtype, got %T", result)
+	}
+}
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - SystemHookResponseMsg
+// ============================================================================
+
+func TestSystemHookResponseMsg_Fields(t *testing.T) {
+	msg := adapter.SystemHookResponseMsg{
+		SessionID: "session-xyz",
+		HookName:  "pre-commit",
+		HookEvent: "PreToolUse",
+		Stdout:    "Hook executed successfully",
+		Stderr:    "",
+		ExitCode:  0,
+	}
+
+	if msg.SessionID != "session-xyz" {
+		t.Errorf("SessionID = %q, want %q", msg.SessionID, "session-xyz")
+	}
+	if msg.HookName != "pre-commit" {
+		t.Errorf("HookName = %q, want %q", msg.HookName, "pre-commit")
+	}
+	if msg.HookEvent != "PreToolUse" {
+		t.Errorf("HookEvent = %q, want %q", msg.HookEvent, "PreToolUse")
+	}
+	if msg.Stdout != "Hook executed successfully" {
+		t.Errorf("Stdout = %q, want %q", msg.Stdout, "Hook executed successfully")
+	}
+	if msg.Stderr != "" {
+		t.Errorf("Stderr = %q, want empty string", msg.Stderr)
+	}
+	if msg.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", msg.ExitCode)
+	}
+}
+
+func TestAdaptMessage_SystemMessage_HookResponse(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "hook_response",
+		Data: map[string]any{
+			"session_id": "sess-hook-123",
+			"hook_name":  "lint-check",
+			"hook_event": "PostToolUse",
+			"stdout":     "Linting passed",
+			"stderr":     "Warning: unused var",
+			"exit_code":  float64(0), // JSON numbers decode as float64
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemHookResponseMsg)
+	if !ok {
+		t.Fatalf("expected SystemHookResponseMsg, got %T", result)
+	}
+
+	if msg.SessionID != "sess-hook-123" {
+		t.Errorf("SessionID = %q, want %q", msg.SessionID, "sess-hook-123")
+	}
+	if msg.HookName != "lint-check" {
+		t.Errorf("HookName = %q, want %q", msg.HookName, "lint-check")
+	}
+	if msg.HookEvent != "PostToolUse" {
+		t.Errorf("HookEvent = %q, want %q", msg.HookEvent, "PostToolUse")
+	}
+	if msg.Stdout != "Linting passed" {
+		t.Errorf("Stdout = %q, want %q", msg.Stdout, "Linting passed")
+	}
+	if msg.Stderr != "Warning: unused var" {
+		t.Errorf("Stderr = %q, want %q", msg.Stderr, "Warning: unused var")
+	}
+	if msg.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", msg.ExitCode)
+	}
+}
+
+func TestAdaptMessage_SystemMessage_HookResponse_PartialFields(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "hook_response",
+		Data: map[string]any{
+			"hook_name": "basic-hook",
+			// Missing other fields
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemHookResponseMsg)
+	if !ok {
+		t.Fatalf("expected SystemHookResponseMsg, got %T", result)
+	}
+
+	if msg.HookName != "basic-hook" {
+		t.Errorf("HookName = %q, want %q", msg.HookName, "basic-hook")
+	}
+	if msg.SessionID != "" {
+		t.Errorf("SessionID = %q, want empty string", msg.SessionID)
+	}
+	if msg.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0 for missing field", msg.ExitCode)
+	}
+}
+
+func TestAdaptMessage_SystemMessage_HookResponse_NonZeroExitCode(t *testing.T) {
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "hook_response",
+		Data: map[string]any{
+			"hook_name": "failing-hook",
+			"stdout":    "",
+			"stderr":    "Error: hook failed",
+			"exit_code": float64(1),
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemHookResponseMsg)
+	if !ok {
+		t.Fatalf("expected SystemHookResponseMsg, got %T", result)
+	}
+
+	if msg.ExitCode != 1 {
+		t.Errorf("ExitCode = %d, want 1", msg.ExitCode)
+	}
+}
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - MessageStartMsg
+// ============================================================================
+
+func TestMessageStartMsg_Fields(t *testing.T) {
+	msg := adapter.MessageStartMsg{
+		MessageID:    "msg-start-123",
+		Model:        "claude-sonnet-4-20250514",
+		InputTokens:  100,
+		OutputTokens: 0,
+	}
+
+	if msg.MessageID != "msg-start-123" {
+		t.Errorf("MessageID = %q, want %q", msg.MessageID, "msg-start-123")
+	}
+	if msg.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model = %q, want %q", msg.Model, "claude-sonnet-4-20250514")
+	}
+	if msg.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100", msg.InputTokens)
+	}
+	if msg.OutputTokens != 0 {
+		t.Errorf("OutputTokens = %d, want 0", msg.OutputTokens)
+	}
+}
+
+func TestAdaptMessage_StreamEvent_MessageStart(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type": claudecode.StreamEventTypeMessageStart,
+			"message": map[string]any{
+				"id":    "msg-abc123",
+				"model": "claude-sonnet-4-20250514",
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	msg, ok := result.(adapter.MessageStartMsg)
+	if !ok {
+		t.Fatalf("expected MessageStartMsg, got %T", result)
+	}
+
+	if msg.MessageID != "msg-abc123" {
+		t.Errorf("MessageID = %q, want %q", msg.MessageID, "msg-abc123")
+	}
+	if msg.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("Model = %q, want %q", msg.Model, "claude-sonnet-4-20250514")
+	}
+}
+
+func TestAdaptMessage_StreamEvent_MessageStart_WithUsage(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type": claudecode.StreamEventTypeMessageStart,
+			"message": map[string]any{
+				"id":    "msg-usage-123",
+				"model": "claude-sonnet-4-20250514",
+				"usage": map[string]any{
+					"input_tokens":  float64(150),
+					"output_tokens": float64(0),
+				},
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	msg, ok := result.(adapter.MessageStartMsg)
+	if !ok {
+		t.Fatalf("expected MessageStartMsg, got %T", result)
+	}
+
+	if msg.InputTokens != 150 {
+		t.Errorf("InputTokens = %d, want 150", msg.InputTokens)
+	}
+	if msg.OutputTokens != 0 {
+		t.Errorf("OutputTokens = %d, want 0", msg.OutputTokens)
+	}
+}
+
+func TestAdaptMessage_StreamEvent_MessageStart_MissingMessage(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type": claudecode.StreamEventTypeMessageStart,
+			// message field is missing
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	if result != nil {
+		t.Errorf("expected nil for missing message field, got %T", result)
+	}
+}
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - MessageDeltaMsg
+// ============================================================================
+
+func TestMessageDeltaMsg_Fields(t *testing.T) {
+	msg := adapter.MessageDeltaMsg{
+		StopReason:   "end_turn",
+		InputTokens:  100,
+		OutputTokens: 250,
+	}
+
+	if msg.StopReason != "end_turn" {
+		t.Errorf("StopReason = %q, want %q", msg.StopReason, "end_turn")
+	}
+	if msg.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100", msg.InputTokens)
+	}
+	if msg.OutputTokens != 250 {
+		t.Errorf("OutputTokens = %d, want 250", msg.OutputTokens)
+	}
+}
+
+func TestAdaptMessage_StreamEvent_MessageDelta(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type": claudecode.StreamEventTypeMessageDelta,
+			"delta": map[string]any{
+				"stop_reason": "end_turn",
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	msg, ok := result.(adapter.MessageDeltaMsg)
+	if !ok {
+		t.Fatalf("expected MessageDeltaMsg, got %T", result)
+	}
+
+	if msg.StopReason != "end_turn" {
+		t.Errorf("StopReason = %q, want %q", msg.StopReason, "end_turn")
+	}
+}
+
+func TestAdaptMessage_StreamEvent_MessageDelta_WithUsage(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type": claudecode.StreamEventTypeMessageDelta,
+			"delta": map[string]any{
+				"stop_reason": "tool_use",
+			},
+			"usage": map[string]any{
+				"input_tokens":  float64(100),
+				"output_tokens": float64(75),
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	msg, ok := result.(adapter.MessageDeltaMsg)
+	if !ok {
+		t.Fatalf("expected MessageDeltaMsg, got %T", result)
+	}
+
+	if msg.StopReason != "tool_use" {
+		t.Errorf("StopReason = %q, want %q", msg.StopReason, "tool_use")
+	}
+	if msg.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, want 100", msg.InputTokens)
+	}
+	if msg.OutputTokens != 75 {
+		t.Errorf("OutputTokens = %d, want 75", msg.OutputTokens)
+	}
+}
+
+func TestAdaptMessage_StreamEvent_MessageDelta_MissingDelta(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type": claudecode.StreamEventTypeMessageDelta,
+			// delta field is missing
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	// Should still return a MessageDeltaMsg but with empty/zero values
+	msg, ok := result.(adapter.MessageDeltaMsg)
+	if !ok {
+		t.Fatalf("expected MessageDeltaMsg, got %T", result)
+	}
+
+	if msg.StopReason != "" {
+		t.Errorf("StopReason = %q, want empty string", msg.StopReason)
+	}
+}
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - ControlRequestMsg
+// ============================================================================
+
+func TestControlRequestMsg_Fields(t *testing.T) {
+	msg := adapter.ControlRequestMsg{
+		RequestID: "req-123",
+		Subtype:   "can_use_tool",
+	}
+
+	if msg.RequestID != "req-123" {
+		t.Errorf("RequestID = %q, want %q", msg.RequestID, "req-123")
+	}
+	if msg.Subtype != "can_use_tool" {
+		t.Errorf("Subtype = %q, want %q", msg.Subtype, "can_use_tool")
+	}
+}
+
+func TestAdaptMessage_ControlRequest(t *testing.T) {
+	ctrlMsg := &claudecode.RawControlMessage{
+		MessageType: "control_request",
+		Data: map[string]any{
+			"request_id": "ctrl-req-456",
+			"subtype":    "can_use_tool",
+		},
+	}
+
+	result := adapter.AdaptMessage(ctrlMsg)
+
+	msg, ok := result.(adapter.ControlRequestMsg)
+	if !ok {
+		t.Fatalf("expected ControlRequestMsg, got %T", result)
+	}
+
+	if msg.RequestID != "ctrl-req-456" {
+		t.Errorf("RequestID = %q, want %q", msg.RequestID, "ctrl-req-456")
+	}
+	if msg.Subtype != "can_use_tool" {
+		t.Errorf("Subtype = %q, want %q", msg.Subtype, "can_use_tool")
+	}
+}
+
+// ============================================================================
+// NEW MESSAGE TYPE TESTS - ControlResponseMsg
+// ============================================================================
+
+func TestControlResponseMsg_Fields(t *testing.T) {
+	msg := adapter.ControlResponseMsg{
+		RequestID: "req-789",
+		IsSuccess: true,
+		Error:     "",
+	}
+
+	if msg.RequestID != "req-789" {
+		t.Errorf("RequestID = %q, want %q", msg.RequestID, "req-789")
+	}
+	if !msg.IsSuccess {
+		t.Errorf("IsSuccess = %v, want true", msg.IsSuccess)
+	}
+	if msg.Error != "" {
+		t.Errorf("Error = %q, want empty string", msg.Error)
+	}
+}
+
+func TestAdaptMessage_ControlResponse_Success(t *testing.T) {
+	ctrlMsg := &claudecode.RawControlMessage{
+		MessageType: "control_response",
+		Data: map[string]any{
+			"request_id": "ctrl-resp-123",
+			"response": map[string]any{
+				"subtype": "success",
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(ctrlMsg)
+
+	msg, ok := result.(adapter.ControlResponseMsg)
+	if !ok {
+		t.Fatalf("expected ControlResponseMsg, got %T", result)
+	}
+
+	if msg.RequestID != "ctrl-resp-123" {
+		t.Errorf("RequestID = %q, want %q", msg.RequestID, "ctrl-resp-123")
+	}
+	if !msg.IsSuccess {
+		t.Errorf("IsSuccess = %v, want true", msg.IsSuccess)
+	}
+}
+
+func TestAdaptMessage_ControlResponse_Error(t *testing.T) {
+	ctrlMsg := &claudecode.RawControlMessage{
+		MessageType: "control_response",
+		Data: map[string]any{
+			"request_id": "ctrl-resp-err",
+			"response": map[string]any{
+				"subtype": "error",
+				"error":   "Permission denied",
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(ctrlMsg)
+
+	msg, ok := result.(adapter.ControlResponseMsg)
+	if !ok {
+		t.Fatalf("expected ControlResponseMsg, got %T", result)
+	}
+
+	if msg.RequestID != "ctrl-resp-err" {
+		t.Errorf("RequestID = %q, want %q", msg.RequestID, "ctrl-resp-err")
+	}
+	if msg.IsSuccess {
+		t.Errorf("IsSuccess = %v, want false", msg.IsSuccess)
+	}
+	if msg.Error != "Permission denied" {
+		t.Errorf("Error = %q, want %q", msg.Error, "Permission denied")
+	}
+}
+
+func TestAdaptMessage_ControlMessage_MissingData(t *testing.T) {
+	ctrlMsg := &claudecode.RawControlMessage{
+		MessageType: "control_request",
+		Data:        map[string]any{},
+	}
+
+	result := adapter.AdaptMessage(ctrlMsg)
+
+	msg, ok := result.(adapter.ControlRequestMsg)
+	if !ok {
+		t.Fatalf("expected ControlRequestMsg, got %T", result)
+	}
+
+	// Should have empty values for missing fields
+	if msg.RequestID != "" {
+		t.Errorf("RequestID = %q, want empty string", msg.RequestID)
+	}
+	if msg.Subtype != "" {
+		t.Errorf("Subtype = %q, want empty string", msg.Subtype)
+	}
+}
+
+func TestAdaptMessage_ControlMessage_Nil(t *testing.T) {
+	var ctrlMsg *claudecode.RawControlMessage = nil
+
+	result := adapter.AdaptMessage(ctrlMsg)
+
+	if result != nil {
+		t.Errorf("expected nil for nil RawControlMessage, got %T", result)
+	}
+}
+
+func TestAdaptMessage_ControlMessage_UnknownType(t *testing.T) {
+	ctrlMsg := &claudecode.RawControlMessage{
+		MessageType: "unknown_control_type",
+		Data:        map[string]any{},
+	}
+
+	result := adapter.AdaptMessage(ctrlMsg)
+
+	if result != nil {
+		t.Errorf("expected nil for unknown control message type, got %T", result)
+	}
+}
+
+// ============================================================================
+// Additional Edge Case Tests for 100% Coverage
+// ============================================================================
+
+func TestAdaptMessage_StreamEvent_NilEvent(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: nil,
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	if result != nil {
+		t.Errorf("expected nil for nil Event field, got %T", result)
+	}
+}
+
+func TestAdaptMessage_StreamEvent_NilStreamEvent(t *testing.T) {
+	var event *claudecode.StreamEvent = nil
+
+	result := adapter.AdaptMessage(event)
+
+	if result != nil {
+		t.Errorf("expected nil for nil StreamEvent, got %T", result)
+	}
+}
+
+func TestAdaptMessage_StreamEvent_ContentBlockDelta_MissingDeltaType(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type":  claudecode.StreamEventTypeContentBlockDelta,
+			"index": float64(0),
+			"delta": map[string]any{
+				// type field is missing
+				"text": "some text",
+			},
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	if result != nil {
+		t.Errorf("expected nil for missing delta type, got %T", result)
+	}
+}
+
+func TestAdaptMessage_IndexAsInt64(t *testing.T) {
+	event := &claudecode.StreamEvent{
+		Event: map[string]any{
+			"type":  claudecode.StreamEventTypeContentBlockStop,
+			"index": int64(7), // int64 type
+		},
+	}
+
+	result := adapter.AdaptMessage(event)
+
+	msg, ok := result.(adapter.StreamBlockStopMsg)
+	if !ok {
+		t.Fatalf("expected StreamBlockStopMsg, got %T", result)
+	}
+
+	if msg.Index != 7 {
+		t.Errorf("Index = %d, want 7", msg.Index)
+	}
+}
+
+// mockMessage implements claudecode.Message for testing the default case
+type mockMessage struct{}
+
+func (m *mockMessage) Type() string { return "mock" }
+
+func TestAdaptMessage_DefaultCase_UnknownType(t *testing.T) {
+	// Use a mock message type that isn't handled by any case
+	msg := &mockMessage{}
+
+	result := adapter.AdaptMessage(msg)
+
+	if result != nil {
+		t.Errorf("expected nil for unknown message type, got %T", result)
+	}
+}

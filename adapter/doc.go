@@ -23,6 +23,13 @@
 //   - ToolUseDeltaMsg: Incremental tool input JSON
 //   - AssistantMsg: Complete assistant message
 //   - ResultMsg: Final result with usage statistics
+//   - UserMsg: User message (typically tool results)
+//   - SystemInitMsg: Session initialization data
+//   - SystemHookResponseMsg: Hook execution results
+//   - MessageStartMsg: Initial message metadata with model info
+//   - MessageDeltaMsg: Final usage stats and stop reason
+//   - ControlRequestMsg: Control protocol request (informational)
+//   - ControlResponseMsg: Control protocol response (informational)
 //   - StreamDoneMsg: Stream completion signal
 //   - StreamErrorMsg: Stream error
 //

@@ -105,6 +105,60 @@ type ToolUseDeltaMsg struct {
     ToolID      string
     Index       int
 }
+
+// UserMsg contains a user message (typically tool results)
+type UserMsg struct {
+    UUID            string
+    Content         any    // string or content blocks
+    ParentToolUseID string
+}
+
+// SystemInitMsg contains session initialization data
+type SystemInitMsg struct {
+    SessionID      string
+    Model          string
+    Cwd            string
+    Tools          []string
+    PermissionMode string
+}
+
+// SystemHookResponseMsg contains hook execution results
+type SystemHookResponseMsg struct {
+    SessionID string
+    HookName  string
+    HookEvent string
+    Stdout    string
+    Stderr    string
+    ExitCode  int
+}
+
+// MessageStartMsg contains initial message metadata with model info
+type MessageStartMsg struct {
+    MessageID    string
+    Model        string
+    InputTokens  int
+    OutputTokens int
+}
+
+// MessageDeltaMsg contains final usage stats and stop reason
+type MessageDeltaMsg struct {
+    StopReason   string
+    InputTokens  int
+    OutputTokens int
+}
+
+// ControlRequestMsg contains control protocol request (informational)
+type ControlRequestMsg struct {
+    RequestID string
+    Subtype   string
+}
+
+// ControlResponseMsg contains control protocol response (informational)
+type ControlResponseMsg struct {
+    RequestID string
+    IsSuccess bool
+    Error     string
+}
 ```
 
 ### Stream Command
@@ -1321,9 +1375,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 | `content_block_delta` (thinking) | `ThinkingDeltaMsg` | thinking |
 | `content_block_delta` (input_json) | `ToolUseDeltaMsg` | tooluse |
 | `content_block_stop` | `StreamBlockStopMsg` | all |
+| `message_start` | `MessageStartMsg` | status |
+| `message_delta` | `MessageDeltaMsg` | status |
 | `message_stop` | `StreamDoneMsg` | layout |
+| `UserMessage` | `UserMsg` | message |
+| `SystemMessage` (init) | `SystemInitMsg` | status |
+| `SystemMessage` (hook_response) | `SystemHookResponseMsg` | toast/log |
 | `AssistantMessage` | `AssistantMsg` | message |
 | `ResultMessage` | `ResultMsg` | status |
+| `control_request` | `ControlRequestMsg` | debug |
+| `control_response` | `ControlResponseMsg` | debug |
 | Error | `StreamErrorMsg` | toast |
 
 ### canUseTool to Components

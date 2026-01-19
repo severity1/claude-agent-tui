@@ -68,6 +68,60 @@ type ResultMsg struct {
 	TotalCost    float64
 }
 
+// UserMsg contains a user message (typically tool results).
+type UserMsg struct {
+	UUID            string
+	Content         any // string or content blocks
+	ParentToolUseID string
+}
+
+// SystemInitMsg contains session initialization data.
+type SystemInitMsg struct {
+	SessionID      string
+	Model          string
+	Cwd            string
+	Tools          []string
+	PermissionMode string
+}
+
+// SystemHookResponseMsg contains hook execution results.
+type SystemHookResponseMsg struct {
+	SessionID string
+	HookName  string
+	HookEvent string
+	Stdout    string
+	Stderr    string
+	ExitCode  int
+}
+
+// MessageStartMsg contains initial message metadata with model info.
+type MessageStartMsg struct {
+	MessageID    string
+	Model        string
+	InputTokens  int
+	OutputTokens int
+}
+
+// MessageDeltaMsg contains final usage stats and stop reason.
+type MessageDeltaMsg struct {
+	StopReason   string
+	InputTokens  int
+	OutputTokens int
+}
+
+// ControlRequestMsg contains control protocol request (informational).
+type ControlRequestMsg struct {
+	RequestID string
+	Subtype   string
+}
+
+// ControlResponseMsg contains control protocol response (informational).
+type ControlResponseMsg struct {
+	RequestID string
+	IsSuccess bool
+	Error     string
+}
+
 // StreamDoneMsg signals stream completion.
 type StreamDoneMsg struct{}
 
@@ -118,6 +172,12 @@ func AdaptMessage(msg claudecode.Message) tea.Msg {
 		return AssistantMsg{Message: m}
 	case *claudecode.ResultMessage:
 		return adaptResultMessage(m)
+	case *claudecode.UserMessage:
+		return adaptUserMessage(m)
+	case *claudecode.SystemMessage:
+		return adaptSystemMessage(m)
+	case *claudecode.RawControlMessage:
+		return adaptControlMessage(m)
 	default:
 		return nil
 	}
@@ -142,6 +202,10 @@ func adaptStreamEvent(event *claudecode.StreamEvent) tea.Msg {
 		return adaptBlockDelta(event)
 	case claudecode.StreamEventTypeContentBlockStop:
 		return adaptBlockStop(event)
+	case claudecode.StreamEventTypeMessageStart:
+		return adaptMessageStart(event)
+	case claudecode.StreamEventTypeMessageDelta:
+		return adaptMessageDelta(event)
 	case claudecode.StreamEventTypeMessageStop:
 		return StreamDoneMsg{}
 	default:
@@ -270,4 +334,163 @@ func toInt(v any) int {
 	default:
 		return 0
 	}
+}
+
+// adaptUserMessage converts a UserMessage to UserMsg.
+func adaptUserMessage(msg *claudecode.UserMessage) tea.Msg {
+	if msg == nil {
+		return nil
+	}
+
+	return UserMsg{
+		UUID:            msg.GetUUID(),
+		Content:         msg.Content,
+		ParentToolUseID: msg.GetParentToolUseID(),
+	}
+}
+
+// adaptSystemMessage converts a SystemMessage to the appropriate tea.Msg
+// based on the subtype.
+func adaptSystemMessage(msg *claudecode.SystemMessage) tea.Msg {
+	if msg == nil {
+		return nil
+	}
+
+	switch msg.Subtype {
+	case "init":
+		return adaptSystemInit(msg)
+	case "hook_response":
+		return adaptHookResponse(msg)
+	default:
+		return nil
+	}
+}
+
+// adaptSystemInit extracts session initialization data from SystemMessage.
+func adaptSystemInit(msg *claudecode.SystemMessage) tea.Msg {
+	return SystemInitMsg{
+		SessionID:      toString(msg.Data["session_id"]),
+		Model:          toString(msg.Data["model"]),
+		Cwd:            toString(msg.Data["cwd"]),
+		Tools:          toStringSlice(msg.Data["tools"]),
+		PermissionMode: toString(msg.Data["permission_mode"]),
+	}
+}
+
+// adaptHookResponse extracts hook execution results from SystemMessage.
+func adaptHookResponse(msg *claudecode.SystemMessage) tea.Msg {
+	return SystemHookResponseMsg{
+		SessionID: toString(msg.Data["session_id"]),
+		HookName:  toString(msg.Data["hook_name"]),
+		HookEvent: toString(msg.Data["hook_event"]),
+		Stdout:    toString(msg.Data["stdout"]),
+		Stderr:    toString(msg.Data["stderr"]),
+		ExitCode:  toInt(msg.Data["exit_code"]),
+	}
+}
+
+// adaptMessageStart handles message_start stream events.
+func adaptMessageStart(event *claudecode.StreamEvent) tea.Msg {
+	message, ok := event.Event["message"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	msg := MessageStartMsg{
+		MessageID: toString(message["id"]),
+		Model:     toString(message["model"]),
+	}
+
+	// Extract usage if present
+	if usage, ok := message["usage"].(map[string]any); ok {
+		msg.InputTokens = toInt(usage["input_tokens"])
+		msg.OutputTokens = toInt(usage["output_tokens"])
+	}
+
+	return msg
+}
+
+// adaptMessageDelta handles message_delta stream events.
+func adaptMessageDelta(event *claudecode.StreamEvent) tea.Msg {
+	msg := MessageDeltaMsg{}
+
+	// Extract stop reason from delta
+	if delta, ok := event.Event["delta"].(map[string]any); ok {
+		msg.StopReason = toString(delta["stop_reason"])
+	}
+
+	// Extract usage if present
+	if usage, ok := event.Event["usage"].(map[string]any); ok {
+		msg.InputTokens = toInt(usage["input_tokens"])
+		msg.OutputTokens = toInt(usage["output_tokens"])
+	}
+
+	return msg
+}
+
+// adaptControlMessage converts a RawControlMessage to the appropriate tea.Msg.
+func adaptControlMessage(msg *claudecode.RawControlMessage) tea.Msg {
+	if msg == nil {
+		return nil
+	}
+
+	switch msg.MessageType {
+	case claudecode.MessageTypeControlRequest:
+		return adaptControlRequest(msg)
+	case claudecode.MessageTypeControlResponse:
+		return adaptControlResponse(msg)
+	default:
+		return nil
+	}
+}
+
+// adaptControlRequest extracts control request data.
+func adaptControlRequest(msg *claudecode.RawControlMessage) tea.Msg {
+	return ControlRequestMsg{
+		RequestID: toString(msg.Data["request_id"]),
+		Subtype:   toString(msg.Data["subtype"]),
+	}
+}
+
+// adaptControlResponse extracts control response data.
+func adaptControlResponse(msg *claudecode.RawControlMessage) tea.Msg {
+	requestID := toString(msg.Data["request_id"])
+	isSuccess := false
+	errStr := ""
+
+	if response, ok := msg.Data["response"].(map[string]any); ok {
+		subtype := toString(response["subtype"])
+		isSuccess = subtype == "success"
+		errStr = toString(response["error"])
+	}
+
+	return ControlResponseMsg{
+		RequestID: requestID,
+		IsSuccess: isSuccess,
+		Error:     errStr,
+	}
+}
+
+// toString safely converts an interface{} to string.
+func toString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// toStringSlice converts a []any to []string.
+func toStringSlice(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+
+	result := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if s, ok := item.(string); ok {
+			result = append(result, s)
+		}
+	}
+	return result
 }
