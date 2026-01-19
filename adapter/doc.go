@@ -32,6 +32,7 @@
 //   - ControlResponseMsg: Control protocol response (informational)
 //   - StreamDoneMsg: Stream completion signal
 //   - StreamErrorMsg: Stream error
+//   - UnknownMessageMsg: Unrecognized SDK message type (for debugging)
 //
 // # Control Messages
 //

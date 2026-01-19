@@ -111,16 +111,23 @@ claude-agent-tui/
 
 ### Message Type Adaptation
 The adapter converts SDK messages to TUI-specific message types:
-- `*claudecode.StreamEvent` -> `StreamDeltaMsg`, `StreamBlockStartMsg`, `ThinkingDeltaMsg`, etc.
+- `*claudecode.StreamEvent` -> `StreamDeltaMsg`, `StreamBlockStartMsg`, `StreamBlockStopMsg`, `ThinkingDeltaMsg`, `ToolUseDeltaMsg`, `MessageStartMsg`, `MessageDeltaMsg`
 - `*claudecode.AssistantMessage` -> `AssistantMsg`
 - `*claudecode.ResultMessage` -> `ResultMsg` (with extracted usage stats)
 - `*claudecode.UserMessage` -> `UserMsg`
 - `*claudecode.SystemMessage` -> `SystemInitMsg`, `SystemHookResponseMsg`
 - `*claudecode.RawControlMessage` -> `ControlRequestMsg`, `ControlResponseMsg`
+- Unknown types -> `UnknownMessageMsg` (for debugging)
 
 ### Stream Event Types
 Content block events: `content_block_start`, `content_block_delta`, `content_block_stop`
 Message events: `message_start`, `message_delta`, `message_stop`
+
+### State Tracking Pattern
+- `StreamBlockStartMsg` provides `ToolName` and `ToolID` for tool_use blocks
+- `ToolUseDeltaMsg` contains only `PartialJSON` and `Index`
+- TUI layer tracks state to associate tool info with deltas by index
+- This separates concerns: adapter emits granular events, TUI manages state
 
 ### Type Extraction Helpers
 - `toInt(v any)`: Handles int, float64, int64 (JSON decodes numbers as float64)

@@ -71,6 +71,7 @@ func main() {
 		// Parse JSON to determine message type
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARN] JSON parse error: %v (line: %s)\n", err, truncate(line, 80))
 			continue
 		}
 
@@ -94,30 +95,45 @@ func main() {
 		case "control_response":
 			sdkMsg = parseControlResponse(raw)
 		default:
-			fmt.Printf("[UNKNOWN] type=%s\n", msgType)
+			fmt.Printf("[UNKNOWN] type=%s data=%s\n", msgType, truncate(line, 100))
 			continue
 		}
 
 		// Adapt and display
 		adapted := adapter.AdaptMessage(sdkMsg)
-		if adapted != nil {
-			typeName := fmt.Sprintf("%T", adapted)
-			msgCounts[typeName]++
-			printAdaptedMessage(adapted)
+		if adapted == nil {
+			fmt.Fprintf(os.Stderr, "[WARN] AdaptMessage returned nil for type=%s\n", msgType)
+			continue
 		}
+		typeName := fmt.Sprintf("%T", adapted)
+		msgCounts[typeName]++
+		printAdaptedMessage(adapted)
 	}
 
+	var hadError bool
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "Scanner error: %v\n", err)
+		hadError = true
 	}
 
-	cmd.Wait()
+	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			fmt.Fprintf(os.Stderr, "Claude exited with code %d\n", exitErr.ExitCode())
+		} else {
+			fmt.Fprintf(os.Stderr, "Error waiting for claude: %v\n", err)
+		}
+		hadError = true
+	}
 
 	// Summary
 	fmt.Println()
 	fmt.Println("--- Message Type Summary ---")
 	for t, count := range msgCounts {
 		fmt.Printf("  %s: %d\n", t, count)
+	}
+
+	if hadError {
+		os.Exit(1)
 	}
 }
 
@@ -183,6 +199,9 @@ func printAdaptedMessage(msg any) {
 
 	case adapter.StreamErrorMsg:
 		fmt.Printf("[StreamErrorMsg] err=%v\n", m.Err)
+
+	case adapter.UnknownMessageMsg:
+		fmt.Printf("[UnknownMessageMsg] type=%s\n", m.TypeName)
 
 	default:
 		fmt.Printf("[%T] %+v\n", m, m)
@@ -284,9 +303,9 @@ func runValidation() {
 
 	// Test each message type
 	tests := []struct {
-		name    string
-		sdkMsg  claudecode.Message
-		check   func(any) bool
+		name   string
+		sdkMsg claudecode.Message
+		check  func(any) bool
 	}{
 		{
 			name: "UserMsg",

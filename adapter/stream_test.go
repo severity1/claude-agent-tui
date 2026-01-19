@@ -512,8 +512,7 @@ func TestAdaptMessage_ResultMessage(t *testing.T) {
 	}
 }
 
-func TestAdaptMessage_UnknownMessageType(t *testing.T) {
-	// Create a mock type that implements claudecode.Message
+func TestAdaptMessage_NilInput(t *testing.T) {
 	result := adapter.AdaptMessage(nil)
 
 	if result != nil {
@@ -524,14 +523,6 @@ func TestAdaptMessage_UnknownMessageType(t *testing.T) {
 // ============================================================================
 // Edge Case Tests
 // ============================================================================
-
-func TestAdaptMessage_NilMessage(t *testing.T) {
-	result := adapter.AdaptMessage(nil)
-
-	if result != nil {
-		t.Errorf("expected nil for nil input, got %T", result)
-	}
-}
 
 func TestAdaptMessage_StreamEvent_EmptyEvent(t *testing.T) {
 	event := &claudecode.StreamEvent{
@@ -1588,7 +1579,12 @@ func TestAdaptMessage_DefaultCase_UnknownType(t *testing.T) {
 
 	result := adapter.AdaptMessage(msg)
 
-	if result != nil {
-		t.Errorf("expected nil for unknown message type, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg, got %T", result)
+	}
+
+	if unknownMsg.TypeName != "*adapter_test.mockMessage" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "*adapter_test.mockMessage")
 	}
 }

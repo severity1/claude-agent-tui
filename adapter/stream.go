@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	claudecode "github.com/severity1/claude-agent-sdk-go"
@@ -130,6 +131,12 @@ type StreamErrorMsg struct {
 	Err error
 }
 
+// UnknownMessageMsg indicates an unrecognized SDK message type.
+// This is returned instead of nil for unknown types to aid debugging.
+type UnknownMessageMsg struct {
+	TypeName string // Go type name of the unrecognized message
+}
+
 // Error implements the error interface for StreamErrorMsg.
 func (e StreamErrorMsg) Error() string {
 	if e.Err != nil {
@@ -179,7 +186,7 @@ func AdaptMessage(msg claudecode.Message) tea.Msg {
 	case *claudecode.RawControlMessage:
 		return adaptControlMessage(m)
 	default:
-		return nil
+		return UnknownMessageMsg{TypeName: fmt.Sprintf("%T", msg)}
 	}
 }
 
