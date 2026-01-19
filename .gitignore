@@ -25,3 +25,6 @@ coverage.out
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code auto-memory
+.claude/auto-memory/dirty-files
