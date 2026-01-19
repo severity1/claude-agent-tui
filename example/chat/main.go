@@ -26,8 +26,17 @@ func main() {
 
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go \"<prompt>\"")
+		fmt.Println("       go run main.go --validate")
+		fmt.Println()
 		fmt.Println("Example: go run main.go \"say hello\"")
+		fmt.Println("         go run main.go --validate  (tests all message types)")
 		os.Exit(1)
+	}
+
+	// Validation mode - test all message types synthetically
+	if os.Args[1] == "--validate" {
+		runValidation()
+		return
 	}
 
 	prompt := os.Args[1]
@@ -171,6 +180,9 @@ func printAdaptedMessage(msg any) {
 		fmt.Printf("[ControlResponseMsg] id=%s success=%v\n",
 			truncate(m.RequestID, 20), m.IsSuccess)
 
+	case adapter.StreamErrorMsg:
+		fmt.Printf("[StreamErrorMsg] err=%v\n", m.Err)
+
 	default:
 		fmt.Printf("[%T] %+v\n", m, m)
 	}
@@ -253,5 +265,295 @@ func parseControlResponse(raw map[string]any) *claudecode.RawControlMessage {
 	return &claudecode.RawControlMessage{
 		MessageType: "control_response",
 		Data:        raw,
+	}
+}
+
+// runValidation tests all adapter message types synthetically
+func runValidation() {
+	fmt.Println("Validating all 16 adapter message types...")
+	fmt.Println()
+
+	passed := 0
+	failed := 0
+
+	// Test each message type
+	tests := []struct {
+		name    string
+		sdkMsg  claudecode.Message
+		check   func(any) bool
+	}{
+		{
+			name: "UserMsg",
+			sdkMsg: func() *claudecode.UserMessage {
+				uuid := "test-uuid"
+				parent := "test-parent"
+				return &claudecode.UserMessage{
+					Content:         "test content",
+					UUID:            &uuid,
+					ParentToolUseID: &parent,
+				}
+			}(),
+			check: func(m any) bool {
+				msg, ok := m.(adapter.UserMsg)
+				return ok && msg.UUID == "test-uuid" && msg.ParentToolUseID == "test-parent"
+			},
+		},
+		{
+			name: "SystemInitMsg",
+			sdkMsg: &claudecode.SystemMessage{
+				Subtype: "init",
+				Data: map[string]any{
+					"session_id": "sess-123",
+					"model":      "claude-test",
+					"cwd":        "/test",
+					"tools":      []any{"Read", "Write"},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.SystemInitMsg)
+				return ok && msg.SessionID == "sess-123" && msg.Model == "claude-test" && len(msg.Tools) == 2
+			},
+		},
+		{
+			name: "SystemHookResponseMsg",
+			sdkMsg: &claudecode.SystemMessage{
+				Subtype: "hook_response",
+				Data: map[string]any{
+					"hook_name":  "test-hook",
+					"hook_event": "TestEvent",
+					"exit_code":  float64(0),
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.SystemHookResponseMsg)
+				return ok && msg.HookName == "test-hook" && msg.HookEvent == "TestEvent"
+			},
+		},
+		{
+			name: "AssistantMsg",
+			sdkMsg: &claudecode.AssistantMessage{
+				Model: "claude-test",
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.AssistantMsg)
+				return ok && msg.Message.Model == "claude-test"
+			},
+		},
+		{
+			name: "ResultMsg",
+			sdkMsg: func() *claudecode.ResultMessage {
+				cost := 0.05
+				usage := map[string]any{"input_tokens": float64(100), "output_tokens": float64(50)}
+				return &claudecode.ResultMessage{
+					TotalCostUSD: &cost,
+					Usage:        &usage,
+				}
+			}(),
+			check: func(m any) bool {
+				msg, ok := m.(adapter.ResultMsg)
+				return ok && msg.TotalCost == 0.05 && msg.InputTokens == 100 && msg.OutputTokens == 50
+			},
+		},
+		{
+			name: "MessageStartMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type": "message_start",
+					"message": map[string]any{
+						"id":    "msg-123",
+						"model": "claude-test",
+						"usage": map[string]any{"input_tokens": float64(50)},
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.MessageStartMsg)
+				return ok && msg.MessageID == "msg-123" && msg.Model == "claude-test" && msg.InputTokens == 50
+			},
+		},
+		{
+			name: "MessageDeltaMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type": "message_delta",
+					"delta": map[string]any{
+						"stop_reason": "end_turn",
+					},
+					"usage": map[string]any{"output_tokens": float64(75)},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.MessageDeltaMsg)
+				return ok && msg.StopReason == "end_turn" && msg.OutputTokens == 75
+			},
+		},
+		{
+			name: "StreamBlockStartMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type":  "content_block_start",
+					"index": float64(0),
+					"content_block": map[string]any{
+						"type": "tool_use",
+						"name": "Bash",
+						"id":   "tool-123",
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.StreamBlockStartMsg)
+				return ok && msg.BlockType == "tool_use" && msg.ToolName == "Bash" && msg.ToolID == "tool-123"
+			},
+		},
+		{
+			name: "StreamDeltaMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type":  "content_block_delta",
+					"index": float64(0),
+					"delta": map[string]any{
+						"type": "text_delta",
+						"text": "Hello world",
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.StreamDeltaMsg)
+				return ok && msg.Text == "Hello world" && msg.BlockType == "text"
+			},
+		},
+		{
+			name: "ThinkingDeltaMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type":  "content_block_delta",
+					"index": float64(0),
+					"delta": map[string]any{
+						"type":     "thinking_delta",
+						"thinking": "Let me think...",
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.ThinkingDeltaMsg)
+				return ok && msg.Text == "Let me think..."
+			},
+		},
+		{
+			name: "ToolUseDeltaMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type":  "content_block_delta",
+					"index": float64(1),
+					"delta": map[string]any{
+						"type":         "input_json_delta",
+						"partial_json": `{"cmd":"ls"}`,
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.ToolUseDeltaMsg)
+				return ok && msg.PartialJSON == `{"cmd":"ls"}` && msg.Index == 1
+			},
+		},
+		{
+			name: "StreamBlockStopMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type":  "content_block_stop",
+					"index": float64(2),
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.StreamBlockStopMsg)
+				return ok && msg.Index == 2
+			},
+		},
+		{
+			name: "StreamDoneMsg",
+			sdkMsg: &claudecode.StreamEvent{
+				Event: map[string]any{
+					"type": "message_stop",
+				},
+			},
+			check: func(m any) bool {
+				_, ok := m.(adapter.StreamDoneMsg)
+				return ok
+			},
+		},
+		{
+			name: "ControlRequestMsg",
+			sdkMsg: &claudecode.RawControlMessage{
+				MessageType: "control_request",
+				Data: map[string]any{
+					"request_id": "req-123",
+					"subtype":    "can_use_tool",
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.ControlRequestMsg)
+				return ok && msg.RequestID == "req-123" && msg.Subtype == "can_use_tool"
+			},
+		},
+		{
+			name: "ControlResponseMsg",
+			sdkMsg: &claudecode.RawControlMessage{
+				MessageType: "control_response",
+				Data: map[string]any{
+					"request_id": "req-456",
+					"response": map[string]any{
+						"subtype": "success",
+					},
+				},
+			},
+			check: func(m any) bool {
+				msg, ok := m.(adapter.ControlResponseMsg)
+				return ok && msg.RequestID == "req-456" && msg.IsSuccess
+			},
+		},
+	}
+
+	// Run all tests
+	for _, tt := range tests {
+		adapted := adapter.AdaptMessage(tt.sdkMsg)
+		if adapted == nil {
+			fmt.Printf("  FAIL: %s - AdaptMessage returned nil\n", tt.name)
+			failed++
+			continue
+		}
+
+		if tt.check(adapted) {
+			fmt.Printf("  PASS: %s\n", tt.name)
+			printAdaptedMessage(adapted)
+			passed++
+		} else {
+			fmt.Printf("  FAIL: %s - check failed, got %T\n", tt.name, adapted)
+			failed++
+		}
+	}
+
+	// Test StreamErrorMsg separately (it's created internally, not from SDK message)
+	fmt.Println()
+	fmt.Println("Testing StreamErrorMsg (internal type):")
+	errMsg := adapter.StreamErrorMsg{Err: fmt.Errorf("test error")}
+	if errMsg.Error() == "test error" {
+		fmt.Printf("  PASS: StreamErrorMsg\n")
+		printAdaptedMessage(errMsg)
+		passed++
+	} else {
+		fmt.Printf("  FAIL: StreamErrorMsg\n")
+		failed++
+	}
+
+	// Summary
+	fmt.Println()
+	fmt.Println("--- Validation Summary ---")
+	fmt.Printf("  Passed: %d/16\n", passed)
+	fmt.Printf("  Failed: %d/16\n", failed)
+	if failed == 0 {
+		fmt.Println("  Status: ALL TESTS PASSED")
+	} else {
+		fmt.Println("  Status: SOME TESTS FAILED")
+		os.Exit(1)
 	}
 }
