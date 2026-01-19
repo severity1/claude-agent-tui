@@ -242,12 +242,8 @@ func adaptBlockStart(event *claudecode.StreamEvent) tea.Msg {
 
 	// Extract tool info for tool_use blocks
 	if blockType == BlockTypeToolUse {
-		if name, ok := contentBlock["name"].(string); ok {
-			msg.ToolName = name
-		}
-		if id, ok := contentBlock["id"].(string); ok {
-			msg.ToolID = id
-		}
+		msg.ToolName = getStringField(contentBlock, "name")
+		msg.ToolID = getStringField(contentBlock, "id")
 	}
 
 	return msg
@@ -380,11 +376,12 @@ func adaptSystemMessage(msg *claudecode.SystemMessage) tea.Msg {
 
 // adaptSystemInit extracts session initialization data from SystemMessage.
 func adaptSystemInit(msg *claudecode.SystemMessage) tea.Msg {
+	tools, _ := toStringSlice(msg.Data["tools"])
 	return SystemInitMsg{
 		SessionID:      toString(msg.Data["session_id"]),
 		Model:          toString(msg.Data["model"]),
 		Cwd:            toString(msg.Data["cwd"]),
-		Tools:          toStringSlice(msg.Data["tools"]),
+		Tools:          tools,
 		PermissionMode: toString(msg.Data["permission_mode"]),
 	}
 }
@@ -493,18 +490,32 @@ func toString(v any) string {
 	return ""
 }
 
-// toStringSlice converts a []any to []string.
-func toStringSlice(v any) []string {
+// getStringField extracts a string field from a map, returning empty string if
+// the key is missing or the value is not a string.
+func getStringField(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// toStringSlice converts a []any to []string, returning the count of
+// non-string items that were skipped. This allows callers to detect
+// when unexpected types are present in the source data.
+func toStringSlice(v any) ([]string, int) {
 	arr, ok := v.([]any)
 	if !ok {
-		return nil
+		return nil, 0
 	}
 
 	result := make([]string, 0, len(arr))
+	skipped := 0
 	for _, item := range arr {
 		if s, ok := item.(string); ok {
 			result = append(result, s)
+		} else {
+			skipped++
 		}
 	}
-	return result
+	return result, skipped
 }

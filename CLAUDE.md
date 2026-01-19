@@ -167,7 +167,8 @@ Message events: `message_start`, `message_delta`, `message_stop`
 ### Type Extraction Helpers
 - `toInt(v any)`: Handles int, float64, int64 (JSON decodes numbers as float64)
 - `toString(v any)`: Safe string extraction
-- `toStringSlice(v any)`: Convert `[]any` to `[]string`
+- `getStringField(m map[string]any, key string)`: Safe map field extraction, returns empty string if missing or wrong type
+- `toStringSlice(v any) ([]string, int)`: Convert `[]any` to `[]string`, returns skipped count for error detection
 
 <!-- END AUTO-MANAGED -->
 
