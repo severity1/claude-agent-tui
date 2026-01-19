@@ -82,19 +82,11 @@ func TestThinkingDeltaMsg_Fields(t *testing.T) {
 func TestToolUseDeltaMsg_Fields(t *testing.T) {
 	msg := adapter.ToolUseDeltaMsg{
 		PartialJSON: `{"command":`,
-		ToolName:    "Bash",
-		ToolID:      "tool_456",
 		Index:       1,
 	}
 
 	if msg.PartialJSON != `{"command":` {
 		t.Errorf("PartialJSON = %q, want %q", msg.PartialJSON, `{"command":`)
-	}
-	if msg.ToolName != "Bash" {
-		t.Errorf("ToolName = %q, want %q", msg.ToolName, "Bash")
-	}
-	if msg.ToolID != "tool_456" {
-		t.Errorf("ToolID = %q, want %q", msg.ToolID, "tool_456")
 	}
 	if msg.Index != 1 {
 		t.Errorf("Index = %d, want %d", msg.Index, 1)

@@ -157,8 +157,8 @@ func printAdaptedMessage(msg any) {
 			m.Index, truncate(m.Text, 50))
 
 	case adapter.ToolUseDeltaMsg:
-		fmt.Printf("[ToolUseDeltaMsg] index=%d tool_name=%s tool_id=%s json=%q\n",
-			m.Index, m.ToolName, m.ToolID, truncate(m.PartialJSON, 50))
+		fmt.Printf("[ToolUseDeltaMsg] index=%d json=%q\n",
+			m.Index, truncate(m.PartialJSON, 50))
 
 	case adapter.StreamBlockStopMsg:
 		fmt.Printf("[StreamBlockStopMsg] index=%d\n", m.Index)

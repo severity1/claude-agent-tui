@@ -99,10 +99,10 @@ type ThinkingDeltaMsg struct {
 }
 
 // ToolUseDeltaMsg contains incremental tool input JSON
+// Note: ToolName/ToolID come from StreamBlockStartMsg, not delta events.
+// The TUI layer tracks state to associate tool info with deltas by index.
 type ToolUseDeltaMsg struct {
     PartialJSON string
-    ToolName    string
-    ToolID      string
     Index       int
 }
 
