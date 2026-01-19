@@ -182,12 +182,14 @@ Cross-reference review findings against open issues. If a finding is already tra
 
 For each issue, check:
 ```
-1. Is this tracked in a GitHub MVP issue? -> FILTER (note issue #)
+1. Is this tracked in OR directly supports a GitHub MVP issue? -> FILTER (note issue #)
 2. Is this in docs/ as planned work? -> FILTER
 3. Is this in example/ and non-critical? -> FILTER
 4. Does this block current branch functionality? -> KEEP
 5. Is this a code quality issue in core library? -> KEEP
 ```
+
+**"Directly supports"** means the finding relates to functionality that an MVP issue depends on or enables, even if not explicitly mentioned in that issue. Use judgment - if fixing this finding would be part of completing an MVP issue, filter it.
 
 ### Present Filtered List
 
