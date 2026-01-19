@@ -87,6 +87,7 @@ claude-agent-tui/
 - Use `AdaptMessage()` for synchronous SDK message conversion
 - Handle context cancellation with `StreamErrorMsg`
 - Return `StreamDoneMsg` on channel close
+- **Error handling**: Return `UnknownMessageMsg` instead of nil for unrecognized types (fail informatively, not silently)
 
 ### Testing
 - **External test packages**: Use `package adapter_test` (not `package adapter`)
@@ -118,6 +119,12 @@ The adapter converts SDK messages to TUI-specific message types:
 - `*claudecode.SystemMessage` -> `SystemInitMsg`, `SystemHookResponseMsg`
 - `*claudecode.RawControlMessage` -> `ControlRequestMsg`, `ControlResponseMsg`
 - Unknown types -> `UnknownMessageMsg` (for debugging)
+
+### Error Handling Pattern
+- Never return nil for unrecognized message types
+- Return `UnknownMessageMsg` with descriptive `TypeName` field for debugging
+- TypeName format examples: `"StreamEvent/nil"`, `"StreamEvent/unknown_event"`, `"SystemMessage/unknown_subtype"`
+- Pattern: Fail informatively with context, not silently
 
 ### Stream Event Types
 Content block events: `content_block_start`, `content_block_delta`, `content_block_stop`
