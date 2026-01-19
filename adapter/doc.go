@@ -34,9 +34,9 @@
 //   - StreamErrorMsg: Stream error
 //   - UnknownMessageMsg: Unrecognized SDK message type (for debugging)
 //
-// # Control Messages
+// # Control Messages (Planned - control.go)
 //
-// ToolControlAdapter intercepts canUseTool callbacks and emits:
+// ToolControlAdapter will intercept canUseTool callbacks and emit:
 //
 //   - ShowPermissionPromptMsg: Tool permission request
 //   - ShowQuestionPromptMsg: AskUserQuestion tool

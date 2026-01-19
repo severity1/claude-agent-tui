@@ -167,9 +167,10 @@ func StreamCmd(ctx context.Context, ch <-chan claudecode.Message) tea.Cmd {
 
 // AdaptMessage converts SDK message to appropriate tea.Msg.
 // This function is exported for testing purposes.
+// Returns UnknownMessageMsg for nil input to maintain consistent error handling.
 func AdaptMessage(msg claudecode.Message) tea.Msg {
 	if msg == nil {
-		return nil
+		return UnknownMessageMsg{TypeName: "nil"}
 	}
 
 	switch m := msg.(type) {
@@ -419,11 +420,13 @@ func adaptMessageStart(event *claudecode.StreamEvent) tea.Msg {
 
 // adaptMessageDelta handles message_delta stream events.
 func adaptMessageDelta(event *claudecode.StreamEvent) tea.Msg {
-	msg := MessageDeltaMsg{}
+	delta, ok := event.Event["delta"].(map[string]any)
+	if !ok {
+		return UnknownMessageMsg{TypeName: "StreamEvent/message_delta/missing-delta"}
+	}
 
-	// Extract stop reason from delta
-	if delta, ok := event.Event["delta"].(map[string]any); ok {
-		msg.StopReason = toString(delta["stop_reason"])
+	msg := MessageDeltaMsg{
+		StopReason: toString(delta["stop_reason"]),
 	}
 
 	// Extract usage if present

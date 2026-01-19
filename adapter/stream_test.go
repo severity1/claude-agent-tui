@@ -515,8 +515,12 @@ func TestAdaptMessage_ResultMessage(t *testing.T) {
 func TestAdaptMessage_NilInput(t *testing.T) {
 	result := adapter.AdaptMessage(nil)
 
-	if result != nil {
-		t.Errorf("expected nil for nil input, got %T", result)
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
+	if !ok {
+		t.Fatalf("expected UnknownMessageMsg for nil input, got %T", result)
+	}
+	if unknownMsg.TypeName != "nil" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "nil")
 	}
 }
 
@@ -1003,8 +1007,8 @@ func TestAdaptMessage_SystemMessage_Init_PartialFields(t *testing.T) {
 	if msg.Cwd != "" {
 		t.Errorf("Cwd = %q, want empty string", msg.Cwd)
 	}
-	if msg.Tools != nil && len(msg.Tools) != 0 {
-		t.Errorf("Tools = %v, want nil or empty", msg.Tools)
+	if len(msg.Tools) != 0 {
+		t.Errorf("Tools = %v, want empty", msg.Tools)
 	}
 }
 
@@ -1367,14 +1371,13 @@ func TestAdaptMessage_StreamEvent_MessageDelta_MissingDelta(t *testing.T) {
 
 	result := adapter.AdaptMessage(event)
 
-	// Should still return a MessageDeltaMsg but with empty/zero values
-	msg, ok := result.(adapter.MessageDeltaMsg)
+	// Should return UnknownMessageMsg for missing delta field
+	unknownMsg, ok := result.(adapter.UnknownMessageMsg)
 	if !ok {
-		t.Fatalf("expected MessageDeltaMsg, got %T", result)
+		t.Fatalf("expected UnknownMessageMsg for missing delta, got %T", result)
 	}
-
-	if msg.StopReason != "" {
-		t.Errorf("StopReason = %q, want empty string", msg.StopReason)
+	if unknownMsg.TypeName != "StreamEvent/message_delta/missing-delta" {
+		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "StreamEvent/message_delta/missing-delta")
 	}
 }
 
