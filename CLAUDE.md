@@ -5,11 +5,12 @@ This file provides guidance to Claude Code when working with code in this reposi
 <!-- AUTO-MANAGED: project-description -->
 ## Overview
 
-**Claude Agent TUI** - Reusable terminal UI component library for building Claude Code interfaces using the Charmbracelet ecosystem. Provides Bubble Tea components that integrate with `claude-agent-sdk-go`.
+**Claude Agent TUI** - Reusable terminal UI component library for building Claude Code interfaces using the Charmbracelet ecosystem. Currently provides stream adapter for SDK integration, with component library planned.
 
 - **Module**: `github.com/severity1/claude-agent-tui`
 - **Go Version**: 1.24+
 - **Core Dependencies**: Bubble Tea, Lip Gloss, Bubbles, claude-agent-sdk-go
+- **Status**: Stream adapter implemented, components and layouts in planning phase
 
 <!-- END AUTO-MANAGED -->
 
@@ -17,17 +18,27 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Build & Development Commands
 
 ```bash
-# Build and test
-go build ./...                    # Build all packages
-go test ./...                     # Run all tests
-go test -race ./...               # Race condition detection
+# Make targets (preferred)
+make all                          # Full build: check + build
+make check                        # Full check: fmt, vet, lint, test
+make build                        # Build all packages
+make test                         # Run all tests
+make test-race                    # Race condition detection
 
-# Code quality
-go fmt ./...                      # Format code
-go vet ./...                      # Static analysis
+# Quality checks
+make lint                         # Run complexity + coverage checks
+make lint-complexity              # Check complexity (threshold: 15)
+make lint-coverage                # Check coverage (threshold: 90% for adapter)
+make coverage-html                # Generate HTML coverage report
+make fmt                          # Format code
+make vet                          # Static analysis
+
+# TUI testing (teatest golden files)
+make test-tui                     # Run teatest golden file tests
+make test-tui-update              # Update golden files after intentional UI changes
 
 # Run examples
-go run example/chat/main.go      # Run chat example with prompt
+go run example/chat/main.go       # Run chat example with prompt
 go run example/chat/main.go --validate  # Validate all adapter message types
 ```
 
