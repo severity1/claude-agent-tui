@@ -112,22 +112,16 @@ func (c *ClientAdapter) ConnectCmdWithContext(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		c.mu.Lock()
 
-		// Already connected or connecting
+		// Already connected or connecting - return actual current state
 		if c.state == ClientStateConnected || c.state == ClientStateConnecting {
+			currentState := c.state
 			c.mu.Unlock()
-			return ClientStateMsg{State: ClientStateConnected}
+			return ClientStateMsg{State: currentState}
 		}
 
+		// Set state to connecting and initialize resources atomically
 		c.state = ClientStateConnecting
-		c.mu.Unlock()
-
-		// Create context for this connection lifecycle
-		c.mu.Lock()
 		c.ctx, c.cancel = context.WithCancel(ctx)
-		c.mu.Unlock()
-
-		// Create client if not provided (for testing)
-		c.mu.Lock()
 		if c.client == nil {
 			c.client = claudecode.NewClient(c.options...)
 		}
@@ -135,7 +129,7 @@ func (c *ClientAdapter) ConnectCmdWithContext(ctx context.Context) tea.Cmd {
 		connCtx := c.ctx
 		c.mu.Unlock()
 
-		// Connect the client
+		// Connect the client (blocking operation, outside lock)
 		if err := client.Connect(connCtx); err != nil {
 			c.setState(ClientStateError)
 			return ClientStateMsg{State: ClientStateError, Error: fmt.Errorf("connect failed: %w", err)}
@@ -243,6 +237,7 @@ func (c *ClientAdapter) InterruptCmd() tea.Cmd {
 
 // DisconnectCmd returns a tea.Cmd that disconnects from the SDK.
 // It emits ClientStateMsg upon completion and cleans up resources.
+// Resources are always cleaned up, even if disconnect fails.
 func (c *ClientAdapter) DisconnectCmd() tea.Cmd {
 	return func() tea.Msg {
 		c.mu.Lock()
@@ -262,22 +257,26 @@ func (c *ClientAdapter) DisconnectCmd() tea.Cmd {
 			cancel()
 		}
 
-		// Disconnect client
+		// Disconnect client and capture any error
+		var disconnectErr error
 		if client != nil {
-			if err := client.Disconnect(); err != nil {
-				c.mu.Lock()
-				c.state = ClientStateError
-				c.mu.Unlock()
-				return ClientStateMsg{State: ClientStateError, Error: fmt.Errorf("disconnect failed: %w", err)}
-			}
+			disconnectErr = client.Disconnect()
 		}
 
-		// Clean up resources
+		// Always clean up resources, even if disconnect failed
 		c.mu.Lock()
 		c.client = nil
 		c.msgChan = nil
 		c.ctx = nil
 		c.cancel = nil
+		if disconnectErr != nil {
+			c.state = ClientStateError
+			c.mu.Unlock()
+			return ClientStateMsg{
+				State: ClientStateError,
+				Error: fmt.Errorf("disconnect failed (resources cleaned up): %w", disconnectErr),
+			}
+		}
 		c.state = ClientStateDisconnected
 		c.mu.Unlock()
 

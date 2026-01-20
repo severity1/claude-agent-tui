@@ -578,6 +578,32 @@ func TestClientAdapter_InterruptCmd_NotConnected(t *testing.T) {
 	}
 }
 
+func TestClientAdapter_InterruptCmd_Failure(t *testing.T) {
+	mock := newMockClient()
+	mock.interruptErr = errors.New("interrupt failed")
+	ca := adapter.NewClientAdapterWithClient(mock)
+
+	// Connect and query
+	ca.ConnectCmd()()
+	ca.QueryCmd("Hello")()
+
+	// Interrupt should fail
+	cmd := ca.InterruptCmd()
+	result := cmd()
+
+	stateMsg, ok := result.(adapter.ClientStateMsg)
+	if !ok {
+		t.Fatalf("expected ClientStateMsg, got %T", result)
+	}
+
+	if stateMsg.State != adapter.ClientStateError {
+		t.Errorf("State = %v, want %v", stateMsg.State, adapter.ClientStateError)
+	}
+	if stateMsg.Error == nil {
+		t.Error("Error should not be nil on interrupt failure")
+	}
+}
+
 // ============================================================================
 // DisconnectCmd Tests
 // ============================================================================
@@ -680,6 +706,29 @@ func TestClientAdapter_DisconnectCmd_Failure(t *testing.T) {
 	}
 	if stateMsg.Error == nil {
 		t.Error("Error should not be nil on disconnect failure")
+	}
+}
+
+func TestClientAdapter_DisconnectCmd_Failure_CleansUpResources(t *testing.T) {
+	mock := newMockClient()
+	mock.disconnectErr = errors.New("disconnect failed")
+	ca := adapter.NewClientAdapterWithClient(mock)
+
+	// Connect and query
+	ca.ConnectCmd()()
+	ca.QueryCmd("Hello")()
+
+	// Verify channel exists before disconnect
+	if ca.MessageChannel() == nil {
+		t.Error("MessageChannel should exist before disconnect")
+	}
+
+	// Disconnect - should fail but still clean up
+	ca.DisconnectCmd()()
+
+	// Resources should be cleaned up even though disconnect failed
+	if ca.MessageChannel() != nil {
+		t.Error("MessageChannel should be nil after failed disconnect (resources should be cleaned up)")
 	}
 }
 
