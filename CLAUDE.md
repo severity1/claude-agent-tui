@@ -236,6 +236,14 @@ Message events: `message_start`, `message_delta`, `message_stop`
 - **Lock safety**: Minimize lock hold time during blocking operations (connect, query) to prevent deadlocks
 - **Idempotency**: ConnectCmd returns current state if already connected/connecting instead of erroring
 
+### StreamCmd Message Loop Pattern
+- **CRITICAL**: All message handlers in `Update()` must return `adapter.StreamCmd(ctx, msgChan)` to continue receiving
+- Missing handler causes event loop to fall through and stop listening to SDK messages
+- Required for ALL adapter message types: `StreamDeltaMsg`, `MessageStartMsg`, `MessageDeltaMsg`, `StreamBlockStartMsg`, `StreamBlockStopMsg`, `ThinkingDeltaMsg`, `ToolUseDeltaMsg`, `UnknownMessageMsg`, `AssistantMsg`, `ResultMsg`, `UserMsg`, `SystemInitMsg`, `SystemHookResponseMsg`, `ControlRequestMsg`, `ControlResponseMsg`
+- Only `StreamDoneMsg` and `StreamErrorMsg` should NOT return `StreamCmd` (they signal end of stream)
+- Pattern: `case adapter.XxxMsg: /* handle */ return m, adapter.StreamCmd(m.ctx, m.msgChan)`
+- See `example/client/main.go` for comprehensive implementation with both streaming and complete message types
+
 <!-- END AUTO-MANAGED -->
 
 <!-- AUTO-MANAGED: dependencies -->
