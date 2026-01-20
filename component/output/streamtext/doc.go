@@ -1,25 +1,28 @@
-// Package streamtext provides a live streaming text component for displaying
-// Claude's responses as they arrive character by character.
+// Package streamtext provides a streaming text display component with cursor.
 //
-// SDK Mapping: StreamEvent (content_block_delta with text_delta type)
+// SDK Mapping: StreamDeltaMsg, AssistantMsg content rendering
 //
 // # Features
 //
 // The component supports:
-//   - Streaming text with typing cursor animation
-//   - Markdown rendering via glamour
-//   - Theming and style customization via WithStyles(), WithTheme()
-//   - Multiple display variants via WithVariant(): View, Inline
-//   - Animation respect for REDUCE_MOTION environment variable
+//   - Streaming text accumulation via Append()
+//   - Optional block cursor during active streaming
+//   - Content clearing via Clear()
+//   - Width configuration for text wrapping via WithWidth()
 //
-// # Messages
+// # API
 //
-// The component handles these tea.Msg types:
-//   - DeltaMsg: Appends streaming text
-//   - DoneMsg: Signals stream completion, hides cursor
+// The component is controlled via method calls rather than messages:
+//   - Append(text): Add text to the content buffer
+//   - Clear(): Reset the content buffer
+//   - SetStreaming(bool): Toggle cursor visibility
+//   - Content(): Return accumulated text
 //
 // # Implementation
 //
 // The component implements the Bubble Tea Model interface (Init, Update, View).
+// The Update method passes through all messages unchanged. Parent components
+// control the text content via the Append, Clear, and SetStreaming methods.
+//
 // See docs/COMPONENTS.md for complete specification.
 package streamtext

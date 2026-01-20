@@ -5,12 +5,12 @@ This file provides guidance to Claude Code when working with code in this reposi
 <!-- AUTO-MANAGED: project-description -->
 ## Overview
 
-**Claude Agent TUI** - Reusable terminal UI component library for building Claude Code interfaces using the Charmbracelet ecosystem. Currently provides stream adapter for SDK integration, with component library planned.
+**Claude Agent TUI** - Reusable terminal UI component library for building Claude Code interfaces using the Charmbracelet ecosystem. Provides stream adapter for SDK integration and output components for text rendering.
 
 - **Module**: `github.com/severity1/claude-agent-tui`
 - **Go Version**: 1.24+
 - **Core Dependencies**: Bubble Tea, Lip Gloss, Bubbles, claude-agent-sdk-go
-- **Status**: Stream adapter implemented, components and layouts in planning phase
+- **Status**: Stream adapter and streamtext component implemented, additional components in planning phase
 
 <!-- END AUTO-MANAGED -->
 
@@ -40,6 +40,7 @@ make test-tui-update              # Update golden files after intentional UI cha
 # Run examples
 go run example/chat/main.go       # Run chat example with prompt
 go run example/chat/main.go --validate  # Validate all adapter message types
+go run example/streamtext/main.go  # StreamText component demo (r=restart, q=quit)
 ```
 
 <!-- END AUTO-MANAGED -->
@@ -54,17 +55,23 @@ claude-agent-tui/
 │   ├── stream_test.go            # Comprehensive adapter tests
 │   └── doc.go                    # Package documentation
 │
-├── component/                    # TUI components (planned)
-│   ├── input/                    # Input components
+├── component/                    # TUI components
+│   ├── input/                    # Input components (planned)
 │   └── output/                   # Display components
+│       └── streamtext/           # Streaming text with cursor
+│           ├── streamtext.go     # Component implementation
+│           ├── streamtext_test.go # Comprehensive tests
+│           └── doc.go            # Package documentation
 │
 ├── layout/                       # Composite screens
 │   └── chat/                     # Full chat interface
 │       └── doc.go                # Package documentation
 │
 ├── example/                      # Example applications
-│   └── chat/                     # Stream adapter validation example
-│       └── main.go               # Demonstrates all message types
+│   ├── chat/                     # Stream adapter validation example
+│   │   └── main.go               # Demonstrates all message types
+│   └── streamtext/               # StreamText component demo
+│       └── main.go               # Standalone streaming text example
 │
 ├── docs/                         # Documentation
 │   ├── ARCHITECTURE.md           # System design and data flow
@@ -82,6 +89,10 @@ claude-agent-tui/
 3. `canUseTool` callback -> control adapter -> prompt `tea.Msg`
 4. `View()` renders with Lip Gloss styles
 
+**Component Control Flow:**
+- Message-based: Adapter components respond to `tea.Msg` in `Update()`
+- Method-based: Display components like `streamtext` use direct method calls (Append, Clear, SetStreaming)
+
 <!-- END AUTO-MANAGED -->
 
 <!-- AUTO-MANAGED: conventions -->
@@ -91,7 +102,13 @@ claude-agent-tui/
 - **Model Interface**: All components implement `Init()`, `Update()`, `View()`
 - **Message Types**: Each package defines its own `XxxMsg` types (e.g., `StreamDeltaMsg`, `AssistantMsg`)
 - **Commands**: Use `tea.Cmd` for async operations; return from `Update()` or `Init()`
-- **Functional Options**: Use `WithXxx()` pattern for configuration (e.g., `WithStyles()`, `WithTheme()`)
+- **Functional Options**: Use `WithXxx()` pattern for configuration (e.g., `WithWidth()`, `WithStyles()`, `WithTheme()`)
+
+### Component Patterns
+- **Message-controlled**: Adapter components respond to `tea.Msg` in `Update()` method
+- **Method-controlled**: Display components expose direct methods for parent control (e.g., `Append()`, `Clear()`, `SetStreaming()`)
+- **Passthrough Update**: Method-controlled components return `(m, nil)` from `Update()` without processing messages
+- **State Exposure**: Components provide accessor methods like `Content()` for reading current state
 
 ### Adapter Pattern
 - Bridge SDK channels to Bubble Tea messages via `StreamCmd()`
@@ -105,6 +122,7 @@ claude-agent-tui/
 - **Table-driven tests**: Group related test cases in `[]struct{...}` slices
 - **Test naming**: `TestAdaptMessage_StreamEvent_ContentBlockDelta_Text`
 - **Coverage**: Test nil inputs, missing fields, edge cases explicitly
+- **Test organization**: Use comment separators to group related test sections
 
 ### Naming
 - **Constants**: Group related constants with const blocks
@@ -174,6 +192,20 @@ Message events: `message_start`, `message_delta`, `message_stop`
 - `SystemInitMsg.SkippedToolCount`: Tracks non-string items skipped when parsing tools array from SDK
 - Example app exit codes: 0 (success), 1 (execution error), 2 (unknown messages detected, SDK version mismatch)
 - Empty deltas are valid in streaming scenarios (consumers should check for empty strings if needed)
+
+### StreamText Component Pattern
+- **Cursor rendering**: Block cursor ("▌") appended during streaming state
+- **Text accumulation**: Uses `strings.Builder` for efficient concatenation
+- **Method-based control**: Parent calls `Append(text)` on each delta, `SetStreaming(bool)` on start/stop
+- **Content access**: `Content()` method returns accumulated text without cursor
+- **Passthrough Update**: Returns `(m, nil)` - no message processing, parent controls via methods
+- **Streaming lifecycle**: SetStreaming(true) on content start -> Append() for deltas -> SetStreaming(false) on content stop
+
+### Example Pattern: Simulated Streaming
+- Use `tea.Tick(duration, func(time.Time) tea.Msg)` for timed message delivery
+- Define custom `tickMsg` type to trigger next chunk
+- Maintain chunk index in model state to track progress
+- Example: `streamtext` demo uses 50ms delay between chunks for visual effect
 
 <!-- END AUTO-MANAGED -->
 
