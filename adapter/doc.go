@@ -34,6 +34,27 @@
 //   - StreamErrorMsg: Stream error
 //   - UnknownMessageMsg: Unrecognized SDK message type (for debugging)
 //
+// # Client Adapter (client.go)
+//
+// ClientAdapter manages SDK client lifecycle with Bubble Tea commands:
+//
+//   - NewClientAdapter(): Create adapter with SDK options
+//   - SetProgram(): Set Bubble Tea program for message sending
+//   - ConnectCmd(): Establish SDK connection
+//   - QueryCmd(): Send query and start streaming
+//   - InterruptCmd(): Cancel ongoing stream
+//   - DisconnectCmd(): Clean up resources
+//   - MessageChannel(): Get current streaming channel
+//   - State(): Get current connection state
+//
+// ClientAdapter emits ClientStateMsg for all state changes:
+//
+//   - ClientStateDisconnected: Initial and post-disconnect state
+//   - ClientStateConnecting: Connection in progress
+//   - ClientStateConnected: Ready for queries
+//   - ClientStateStreaming: Query active, messages flowing
+//   - ClientStateError: Error occurred (check Error field)
+//
 // # Control Messages (Planned - control.go)
 //
 // ToolControlAdapter will intercept canUseTool callbacks and emit:
