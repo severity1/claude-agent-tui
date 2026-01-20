@@ -40,6 +40,7 @@ make test-tui-update              # Update golden files after intentional UI cha
 # Run examples
 go run example/chat/main.go       # Run chat example with prompt
 go run example/chat/main.go --validate  # Validate all adapter message types
+go run example/streamtext/main.go  # StreamText component demo (r=restart, q=quit)
 ```
 
 <!-- END AUTO-MANAGED -->
@@ -67,8 +68,10 @@ claude-agent-tui/
 │       └── doc.go                # Package documentation
 │
 ├── example/                      # Example applications
-│   └── chat/                     # Stream adapter validation example
-│       └── main.go               # Demonstrates all message types
+│   ├── chat/                     # Stream adapter validation example
+│   │   └── main.go               # Demonstrates all message types
+│   └── streamtext/               # StreamText component demo
+│       └── main.go               # Standalone streaming text example
 │
 ├── docs/                         # Documentation
 │   ├── ARCHITECTURE.md           # System design and data flow
@@ -197,6 +200,12 @@ Message events: `message_start`, `message_delta`, `message_stop`
 - **Content access**: `Content()` method returns accumulated text without cursor
 - **Passthrough Update**: Returns `(m, nil)` - no message processing, parent controls via methods
 - **Streaming lifecycle**: SetStreaming(true) on content start -> Append() for deltas -> SetStreaming(false) on content stop
+
+### Example Pattern: Simulated Streaming
+- Use `tea.Tick(duration, func(time.Time) tea.Msg)` for timed message delivery
+- Define custom `tickMsg` type to trigger next chunk
+- Maintain chunk index in model state to track progress
+- Example: `streamtext` demo uses 50ms delay between chunks for visual effect
 
 <!-- END AUTO-MANAGED -->
 
