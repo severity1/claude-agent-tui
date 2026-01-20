@@ -314,6 +314,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case adapter.UnknownMessageMsg:
 		m.addLog("Unknown message: %s", msg.TypeName)
 		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	// Handle complete message types (non-streaming SDK output)
+	case adapter.AssistantMsg:
+		// Extract text content from assistant message
+		if msg.Message != nil {
+			for _, block := range msg.Message.Content {
+				if textBlock, ok := block.(*claudecode.TextBlock); ok {
+					m.streamtext.Append(textBlock.Text)
+				}
+			}
+		}
+		m.addLog("Assistant message received")
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	case adapter.ResultMsg:
+		m.addLog("Result: tokens_in=%d tokens_out=%d", msg.InputTokens, msg.OutputTokens)
+		m.streamtext.SetStreaming(false)
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	case adapter.UserMsg:
+		m.addLog("User message received")
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	case adapter.SystemInitMsg:
+		m.addLog("System init: session=%s, tools=%d", msg.SessionID, len(msg.Tools))
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	case adapter.SystemHookResponseMsg:
+		m.addLog("Hook response: %s", msg.HookName)
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	case adapter.ControlRequestMsg:
+		m.addLog("Control request: id=%s", msg.RequestID)
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
+
+	case adapter.ControlResponseMsg:
+		m.addLog("Control response: id=%s", msg.RequestID)
+		return m, adapter.StreamCmd(m.ctx, m.msgChan)
 	}
 
 	return m, nil
