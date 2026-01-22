@@ -1,25 +1,35 @@
-// Package chatinput provides the main chat input component with mode toggles.
+// Package chatinput provides a text input component for chat interfaces.
 //
-// SDK Mapping: User prompt submission, QueryParams
+// The component wraps bubbles/textarea with custom keybindings:
+//   - Enter: Submit text (emits SubmitMsg)
+//   - Alt+Enter / Ctrl+J: Insert newline
+//   - Esc: Clear input
 //
-// # Features
+// # API
 //
-// The component supports:
-//   - Multi-line text input via bubbles textarea
-//   - Mode toggles (plan mode, auto-accept) rendered as chips
-//   - Keyboard shortcuts: Enter/Ctrl+Enter (submit), Ctrl+A (auto-accept),
-//     Ctrl+P (plan mode), Esc (clear)
-//   - Focus management via Focus(), Blur(), Focused()
-//   - Theming and style customization via WithStyles(), WithTheme()
-//   - Multiple display variants via WithVariant(): Fullscreen, Window, View, Overlay
+// Constructor with functional options:
+//   - New(opts ...Option): Create a new ChatInput model
+//   - WithPlaceholder(text string): Set placeholder text
+//   - WithWidth(w int): Set input width
+//   - WithHeight(h int): Set input height
+//
+// Focus management:
+//   - Focus(): Set focus and return cursor blink command
+//   - Blur(): Remove focus
+//   - Focused(): Check if focused
+//
+// Value management:
+//   - Value(): Get current text
+//   - SetValue(s string): Set current text
 //
 // # Messages
 //
-// The component emits:
-//   - SubmitMsg: Contains text, auto-accept state, and plan mode state
+// The component emits SubmitMsg when the user presses Enter with non-empty input.
+// The SubmitMsg contains the submitted text and clears the input automatically.
 //
 // # Implementation
 //
-// The component implements tea.Model and the FocusableComponent interface.
-// See docs/COMPONENTS.md for complete specification.
+// The component implements the Bubble Tea Model interface (Init, Update, View).
+// Key messages are intercepted and transformed based on the keybindings above.
+// Other messages are passed through to the underlying textarea.
 package chatinput
