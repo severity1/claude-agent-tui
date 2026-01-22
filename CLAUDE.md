@@ -41,6 +41,8 @@ make test-tui-update              # Update golden files after intentional UI cha
 go run example/chat/main.go       # Run chat example with prompt
 go run example/chat/main.go --validate  # Validate all adapter message types
 go run example/streamtext/main.go  # StreamText component demo (r=restart, q=quit)
+go run example/client/main.go      # ClientAdapter lifecycle demo (simulated mode)
+go run example/client/main.go --live  # ClientAdapter with real Claude CLI connection
 ```
 
 <!-- END AUTO-MANAGED -->
@@ -53,6 +55,8 @@ claude-agent-tui/
 ├── adapter/                      # SDK integration layer
 │   ├── stream.go                 # StreamEvent -> tea.Msg conversion
 │   ├── stream_test.go            # Comprehensive adapter tests
+│   ├── client.go                 # ClientAdapter for SDK lifecycle
+│   ├── client_test.go            # ClientAdapter tests with mock
 │   └── doc.go                    # Package documentation
 │
 ├── component/                    # TUI components
@@ -70,6 +74,8 @@ claude-agent-tui/
 ├── example/                      # Example applications
 │   ├── chat/                     # Stream adapter validation example
 │   │   └── main.go               # Demonstrates all message types
+│   ├── client/                   # ClientAdapter lifecycle demo
+│   │   └── main.go               # Shows connect, query, interrupt, disconnect with mock/live modes
 │   └── streamtext/               # StreamText component demo
 │       └── main.go               # Standalone streaming text example
 │
@@ -84,14 +90,20 @@ claude-agent-tui/
 
 ### Data Flow
 
-1. SDK `ReceiveMessages()` -> `adapter.StreamCmd()` -> `tea.Msg`
-2. Component receives `tea.Msg` -> `Update()` -> state change
-3. `canUseTool` callback -> control adapter -> prompt `tea.Msg`
-4. `View()` renders with Lip Gloss styles
+1. SDK lifecycle: `ClientAdapter.ConnectCmd()` -> `QueryCmd()` -> streaming
+2. SDK `ReceiveMessages()` -> `adapter.StreamCmd()` -> `tea.Msg`
+3. Component receives `tea.Msg` -> `Update()` -> state change
+4. `canUseTool` callback -> control adapter -> prompt `tea.Msg`
+5. `View()` renders with Lip Gloss styles
 
 **Component Control Flow:**
 - Message-based: Adapter components respond to `tea.Msg` in `Update()`
 - Method-based: Display components like `streamtext` use direct method calls (Append, Clear, SetStreaming)
+
+**ClientAdapter Lifecycle:**
+- Disconnected -> ConnectCmd() -> Connecting -> Connected
+- Connected -> QueryCmd() -> Streaming -> messages flow to StreamCmd()
+- InterruptCmd() cancels active stream, DisconnectCmd() cleans up resources
 
 <!-- END AUTO-MANAGED -->
 
@@ -207,6 +219,31 @@ Message events: `message_start`, `message_delta`, `message_stop`
 - Maintain chunk index in model state to track progress
 - Example: `streamtext` demo uses 50ms delay between chunks for visual effect
 
+### Mock Client Pattern
+- Implement full SDK client interface for testing/demos without real SDK
+- Use channels for message delivery to simulate streaming
+- Add mock delays (e.g., 100ms connect, 50ms per message) for realistic timing
+- Example: `client` example provides `simulatedClient` with goroutine-based message emission
+- Constructor injection: `NewClientAdapterWithClient(mockClient)` enables testing without live SDK
+
+### ClientAdapter Pattern
+- **State management**: Thread-safe state tracking with `sync.RWMutex` (ClientState enum: Disconnected, Connecting, Connected, Streaming, Error)
+- **Lifecycle methods**: All operations return `tea.Cmd` that emit `ClientStateMsg` with state and optional error
+- **Constructors**: `NewClientAdapter(opts...)` for production, `NewClientAdapterWithClient(client, opts...)` for testing with mocks
+- **Integration**: Call `SetProgram(p *tea.Program)` after program creation but before connecting
+- **Error handling**: Operations validate state before execution, return `ClientStateMsg{State: ClientStateError, Error: err}` on failure
+- **Resource cleanup**: `DisconnectCmd()` always cleans up resources even if SDK disconnect fails
+- **Lock safety**: Minimize lock hold time during blocking operations (connect, query) to prevent deadlocks
+- **Idempotency**: ConnectCmd returns current state if already connected/connecting instead of erroring
+
+### StreamCmd Message Loop Pattern
+- **CRITICAL**: All message handlers in `Update()` must return `adapter.StreamCmd(ctx, msgChan)` to continue receiving
+- Missing handler causes event loop to fall through and stop listening to SDK messages
+- Required for ALL adapter message types: `StreamDeltaMsg`, `MessageStartMsg`, `MessageDeltaMsg`, `StreamBlockStartMsg`, `StreamBlockStopMsg`, `ThinkingDeltaMsg`, `ToolUseDeltaMsg`, `UnknownMessageMsg`, `AssistantMsg`, `ResultMsg`, `UserMsg`, `SystemInitMsg`, `SystemHookResponseMsg`, `ControlRequestMsg`, `ControlResponseMsg`
+- Only `StreamDoneMsg` and `StreamErrorMsg` should NOT return `StreamCmd` (they signal end of stream)
+- Pattern: `case adapter.XxxMsg: /* handle */ return m, adapter.StreamCmd(m.ctx, m.msgChan)`
+- See `example/client/main.go` for comprehensive implementation with both streaming and complete message types
+
 <!-- END AUTO-MANAGED -->
 
 <!-- AUTO-MANAGED: dependencies -->
@@ -218,6 +255,7 @@ Message events: `message_start`, `message_delta`, `message_stop`
 | lipgloss | `lipgloss` | Styling, AdaptiveColor |
 | bubbles | various | viewport, textarea, list, spinner |
 | claude-agent-sdk-go | `claudecode` | SDK integration, Message types |
+| sync | `sync` | Thread-safe state (RWMutex in ClientAdapter) |
 
 <!-- END AUTO-MANAGED -->
 

@@ -11,10 +11,13 @@
 # Output of the go coverage tool
 *.out
 coverage.out
+coverage.html
 
 # Built binaries
 /chat
+/client
 /example/chat/chat
+/example/client/client
 
 # IDE
 .idea/
