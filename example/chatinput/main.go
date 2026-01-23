@@ -8,7 +8,8 @@
 //   - Enter: Submit text
 //   - Alt+Enter / Ctrl+J: Insert newline
 //   - Up/Down: Navigate history (preserves draft)
-//   - Ctrl+Shift+C: Copy to clipboard
+//   - Ctrl+Y: Copy to clipboard (recommended)
+//   - Ctrl+Shift+C: Copy to clipboard (if terminal supports it)
 //   - Esc: Clear input / close help / return to input
 //   - Tab: Switch focus between input and keyhints
 //   - ?: Open help window (when keyhints is focused)
@@ -56,7 +57,7 @@ func newModel() model {
 		{Key: "Enter", Desc: "Submit"},
 		{Key: "Alt+Enter", Desc: "Newline"},
 		{Key: "Up/Down", Desc: "History"},
-		{Key: "Ctrl+Shift+C", Desc: "Copy"},
+		{Key: "Ctrl+Y", Desc: "Copy"},
 		{Key: "Esc", Desc: "Clear/Close"},
 		{Key: "Tab", Desc: "Focus hints"},
 		{Key: "?", Desc: "Help (focused)"},

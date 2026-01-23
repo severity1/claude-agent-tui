@@ -27,27 +27,30 @@ func TestNew_DefaultValues(t *testing.T) {
 func TestNew_WithPlaceholder(t *testing.T) {
 	m := chatinput.New(chatinput.WithPlaceholder("Type here..."))
 
-	// Placeholder is internal to textarea, but model should be created
-	if m.Value() != "" {
-		t.Errorf("Value() = %q, want empty string", m.Value())
+	// Placeholder appears in View() when input is empty
+	view := m.View()
+	if !strings.Contains(view, "Type here...") {
+		t.Errorf("View() = %q, want to contain placeholder 'Type here...'", view)
 	}
 }
 
 func TestNew_WithWidth(t *testing.T) {
-	m := chatinput.New(chatinput.WithWidth(80))
+	m := chatinput.New(chatinput.WithWidth(80), chatinput.WithShowCounter(true))
 
-	// Width is internal, verify model created correctly
-	if m.Value() != "" {
-		t.Errorf("Value() = %q, want empty string", m.Value())
+	// Width affects counter alignment - verify model renders
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string, want textarea rendering")
 	}
 }
 
 func TestNew_WithHeight(t *testing.T) {
 	m := chatinput.New(chatinput.WithHeight(5))
 
-	// Height is internal, verify model created correctly
-	if m.Value() != "" {
-		t.Errorf("Value() = %q, want empty string", m.Value())
+	// Height affects textarea rendering - verify model renders
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string, want textarea rendering")
 	}
 }
 
@@ -311,9 +314,10 @@ func TestModel_Focus_ReturnsCmd(t *testing.T) {
 	m := chatinput.New()
 	cmd := m.Focus()
 
-	// Focus may return a command for textarea cursor blink
-	// Just verify it doesn't panic and returns something
-	_ = cmd
+	// Focus returns a command for textarea cursor blink
+	if cmd == nil {
+		t.Error("Focus() returned nil, want cursor blink command")
+	}
 }
 
 // ============================================================================
@@ -670,22 +674,109 @@ func TestNew_WithLineNumbers_False(t *testing.T) {
 }
 
 // ============================================================================
-// Copy to Clipboard Tests
+// Copy to Clipboard Tests (OSC 52)
 // ============================================================================
 
-func TestModel_Update_CtrlShiftC_ReturnsCopyCmd(t *testing.T) {
+func TestModel_CopyCmd_ReturnsCopiedMsg(t *testing.T) {
 	m := chatinput.New()
 	m.Focus()
 	m.SetValue("text to copy")
 
-	// The actual Ctrl+Shift+C handling uses msg.String() == "ctrl+shift+c"
-	// which requires terminal environment to properly simulate.
-	// We test that the model handles keys without crashing.
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	// Call CopyCmd directly (exported method)
+	cmd := m.CopyCmd()
+	if cmd == nil {
+		t.Fatal("CopyCmd() returned nil, want non-nil command")
+	}
 
-	// Verify the model is returned correctly
-	if _, ok := updated.(chatinput.Model); !ok {
-		t.Errorf("Update() returned %T, want chatinput.Model", updated)
+	// Execute the command
+	msg := cmd()
+	copiedMsg, ok := msg.(chatinput.CopiedMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want chatinput.CopiedMsg", msg)
+	}
+
+	// Verify the copied text
+	if copiedMsg.Text != "text to copy" {
+		t.Errorf("CopiedMsg.Text = %q, want %q", copiedMsg.Text, "text to copy")
+	}
+
+	// OSC 52 always returns nil error
+	if copiedMsg.Err != nil {
+		t.Errorf("CopiedMsg.Err = %v, want nil", copiedMsg.Err)
+	}
+}
+
+func TestModel_CopyCmd_EmptyText(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	// Leave empty
+
+	cmd := m.CopyCmd()
+	if cmd == nil {
+		t.Fatal("CopyCmd() returned nil for empty text, want non-nil command")
+	}
+
+	msg := cmd()
+	copiedMsg, ok := msg.(chatinput.CopiedMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want chatinput.CopiedMsg", msg)
+	}
+
+	if copiedMsg.Text != "" {
+		t.Errorf("CopiedMsg.Text = %q, want empty string", copiedMsg.Text)
+	}
+}
+
+func TestModel_CopyCmd_MultilineText(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	m.SetValue("line1\nline2\nline3")
+
+	cmd := m.CopyCmd()
+	msg := cmd()
+	copiedMsg := msg.(chatinput.CopiedMsg)
+
+	if copiedMsg.Text != "line1\nline2\nline3" {
+		t.Errorf("CopiedMsg.Text = %q, want multiline text", copiedMsg.Text)
+	}
+}
+
+func TestModel_CopyCmd_UnicodeText(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	m.SetValue("Hello 世界 🌍")
+
+	cmd := m.CopyCmd()
+	msg := cmd()
+	copiedMsg := msg.(chatinput.CopiedMsg)
+
+	if copiedMsg.Text != "Hello 世界 🌍" {
+		t.Errorf("CopiedMsg.Text = %q, want unicode text", copiedMsg.Text)
+	}
+}
+
+func TestModel_Update_CtrlY_TriggersCopy(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	m.SetValue("text to copy")
+
+	// Ctrl+Y is reliably detected via tea.KeyCtrlY
+	msg := tea.KeyMsg{Type: tea.KeyCtrlY}
+	_, cmd := m.Update(msg)
+
+	if cmd == nil {
+		t.Fatal("Update() returned nil cmd for Ctrl+Y, want CopyCmd")
+	}
+
+	// Execute and verify it's a CopiedMsg
+	result := cmd()
+	copiedMsg, ok := result.(chatinput.CopiedMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want chatinput.CopiedMsg", result)
+	}
+
+	if copiedMsg.Text != "text to copy" {
+		t.Errorf("CopiedMsg.Text = %q, want %q", copiedMsg.Text, "text to copy")
 	}
 }
 
@@ -698,5 +789,62 @@ func TestCopiedMsg_Type(t *testing.T) {
 	}
 	if msg.Err != nil {
 		t.Errorf("CopiedMsg.Err = %v, want nil", msg.Err)
+	}
+}
+
+// ============================================================================
+// Unicode Character Counting Tests
+// ============================================================================
+
+func TestCharCount_Unicode(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  int
+	}{
+		{
+			name:  "ascii only",
+			input: "hello",
+			want:  5,
+		},
+		{
+			name:  "with emoji",
+			input: "hello 👋",
+			want:  7, // 5 letters + 1 space + 1 emoji (not 10 bytes)
+		},
+		{
+			name:  "emoji sequence",
+			input: "🎉🎊🎁",
+			want:  3,
+		},
+		{
+			name:  "japanese characters",
+			input: "こんにちは",
+			want:  5,
+		},
+		{
+			name:  "mixed unicode",
+			input: "Hello 世界 🌍",
+			want:  10, // 5 + 1 + 2 + 1 + 1
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := chatinput.New()
+			m.Focus()
+			m.SetValue(tt.input)
+
+			got := m.CharCount()
+			if got != tt.want {
+				t.Errorf("CharCount() = %d, want %d (input: %q, bytes: %d)",
+					got, tt.want, tt.input, len(tt.input))
+			}
+		})
 	}
 }

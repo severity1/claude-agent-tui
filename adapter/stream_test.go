@@ -1056,6 +1056,33 @@ func TestAdaptMessage_SystemMessage_Nil(t *testing.T) {
 	}
 }
 
+func TestAdaptMessage_SystemMessage_Init_MixedToolTypes(t *testing.T) {
+	// Test toStringSlice with non-string items in tools array
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "init",
+		Data: map[string]any{
+			"session_id": "sess-mixed",
+			"tools":      []any{"Bash", 123, "Read", nil, "Write", true},
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemInitMsg)
+	if !ok {
+		t.Fatalf("expected SystemInitMsg, got %T", result)
+	}
+
+	// Should only have 3 valid string tools
+	if len(msg.Tools) != 3 {
+		t.Errorf("Tools len = %d, want 3 (only strings)", len(msg.Tools))
+	}
+	// Should report 3 skipped items (123, nil, true)
+	if msg.SkippedToolCount != 3 {
+		t.Errorf("SkippedToolCount = %d, want 3", msg.SkippedToolCount)
+	}
+}
+
 func TestAdaptMessage_SystemMessage_EmptySubtype(t *testing.T) {
 	sysMsg := &claudecode.SystemMessage{
 		Subtype: "",

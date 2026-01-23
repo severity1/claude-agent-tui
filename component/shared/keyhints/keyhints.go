@@ -3,6 +3,7 @@ package keyhints
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -85,6 +86,8 @@ func WithSepStyle(style lipgloss.Style) Option {
 }
 
 // WithWidth sets the maximum width for the hints display.
+// When set, View() will truncate hints that exceed this width, showing only
+// hints that fit with a "+N more" indicator for hidden ones.
 func WithWidth(w int) Option {
 	return func(m *Model) {
 		m.width = w
@@ -92,12 +95,15 @@ func WithWidth(w int) Option {
 }
 
 // WithDefaultVisible sets the number of bindings shown when collapsed.
-// If n <= 0, defaults to DefaultVisibleCount.
+// Values <= 0 are ignored and DefaultVisibleCount (3) is used instead.
+// This is intentional: zero would show nothing, and negative values have no meaning.
 func WithDefaultVisible(n int) Option {
 	return func(m *Model) {
 		if n > 0 {
 			m.defaultVisible = n
 		}
+		// Note: Invalid values (n <= 0) fall through to default.
+		// This is intentional per the documented behavior.
 	}
 }
 
@@ -123,8 +129,9 @@ func WithHelpStyle(style lipgloss.Style) Option {
 }
 
 // SetBindings replaces the current bindings.
+// The input slice is cloned to prevent external mutation.
 func (m *Model) SetBindings(bindings []Binding) {
-	m.bindings = bindings
+	m.bindings = slices.Clone(bindings)
 }
 
 // AddBinding adds a new binding to the list.
@@ -132,13 +139,15 @@ func (m *Model) AddBinding(b Binding) {
 	m.bindings = append(m.bindings, b)
 }
 
-// Bindings returns the current list of bindings.
+// Bindings returns a copy of the current list of bindings.
+// The returned slice is a defensive copy to prevent external mutation.
 func (m Model) Bindings() []Binding {
-	return m.bindings
+	return slices.Clone(m.bindings)
 }
 
-// Toggle switches between expanded and collapsed states.
-func (m *Model) Toggle() {
+// ToggleExpanded switches between expanded and collapsed states.
+// Named explicitly to distinguish from ToggleHelp().
+func (m *Model) ToggleExpanded() {
 	m.expanded = !m.expanded
 }
 
@@ -152,9 +161,11 @@ func (m *Model) SetExpanded(expanded bool) {
 	m.expanded = expanded
 }
 
-// Focus sets the focused state.
-func (m *Model) Focus() {
+// Focus sets the focused state and returns nil (no cursor blink needed for this component).
+// The return type matches Bubble Tea conventions for composability with other components.
+func (m *Model) Focus() tea.Cmd {
 	m.focused = true
+	return nil
 }
 
 // Blur removes focus from the component.
@@ -214,6 +225,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model - renders keybindings as inline hints.
 // When collapsed, shows only defaultVisible bindings with a "? more" indicator.
+// When width is set, truncates to fit within width with a "+N more" indicator.
 // When focused, shows a visual indicator.
 func (m Model) View() string {
 	if len(m.bindings) == 0 {
@@ -229,20 +241,58 @@ func (m Model) View() string {
 		bindings = m.bindings[:m.defaultVisible]
 	}
 
+	sep := m.sepStyle.Render(m.separator)
+	sepWidth := lipgloss.Width(sep)
+
+	// Build parts, respecting width constraint if set
 	var parts []string
-	for _, b := range bindings {
-		key := m.keyStyle.Render(b.Key)
-		desc := m.descStyle.Render(b.Desc)
-		parts = append(parts, key+": "+desc)
+	currentWidth := 0
+
+	// Account for focus indicator width if focused
+	if m.focused {
+		currentWidth = lipgloss.Width("> ")
 	}
 
-	// Add "? more" indicator when collapsed with hidden hints
+	for i, b := range bindings {
+		key := m.keyStyle.Render(b.Key)
+		desc := m.descStyle.Render(b.Desc)
+		part := key + ": " + desc
+		partWidth := lipgloss.Width(part)
+
+		// Check if adding this part would exceed width (if width is set)
+		if m.width > 0 && len(parts) > 0 {
+			// Reserve space for potential "+N more" indicator
+			moreIndicator := fmt.Sprintf("+%d more", len(bindings)-i+hiddenCount)
+			moreWidth := lipgloss.Width(m.descStyle.Render(moreIndicator))
+			neededWidth := currentWidth + sepWidth + partWidth
+
+			// If this part won't fit, stop and show remaining count
+			if neededWidth+sepWidth+moreWidth > m.width {
+				hiddenCount += len(bindings) - i
+				break
+			}
+		}
+
+		if len(parts) > 0 {
+			currentWidth += sepWidth
+		}
+		parts = append(parts, part)
+		currentWidth += partWidth
+	}
+
+	// Add "? more" or "+N more" indicator when there are hidden hints
 	if hiddenCount > 0 {
-		moreText := m.descStyle.Render(fmt.Sprintf("? %d more", hiddenCount))
+		var moreText string
+		if m.width > 0 {
+			// Width-based truncation uses "+N more" format
+			moreText = m.descStyle.Render(fmt.Sprintf("+%d more", hiddenCount))
+		} else {
+			// Collapsed state uses "? N more" format
+			moreText = m.descStyle.Render(fmt.Sprintf("? %d more", hiddenCount))
+		}
 		parts = append(parts, moreText)
 	}
 
-	sep := m.sepStyle.Render(m.separator)
 	result := strings.Join(parts, sep)
 
 	// Add focus indicator
@@ -279,19 +329,25 @@ func (m Model) ViewHelp() string {
 	sb.WriteString(m.keyStyle.Render("Keyboard Shortcuts"))
 	sb.WriteString("\n\n")
 
-	// Find max key length for alignment
-	maxKeyLen := 0
+	// Find max key display width for alignment (handles Unicode)
+	maxKeyWidth := 0
 	for _, b := range m.bindings {
-		if len(b.Key) > maxKeyLen {
-			maxKeyLen = len(b.Key)
+		if w := lipgloss.Width(b.Key); w > maxKeyWidth {
+			maxKeyWidth = w
 		}
 	}
 
-	// Render each binding
+	// Render each binding with proper Unicode-aware padding
 	for _, b := range m.bindings {
-		key := m.keyStyle.Render(fmt.Sprintf("%-*s", maxKeyLen, b.Key))
+		// Use lipgloss Width for proper display width padding (handles CJK, etc.)
+		keyWidth := lipgloss.Width(b.Key)
+		padding := ""
+		if keyWidth < maxKeyWidth {
+			padding = strings.Repeat(" ", maxKeyWidth-keyWidth)
+		}
+		key := m.keyStyle.Render(b.Key + padding)
 		desc := m.descStyle.Render(b.Desc)
-		sb.WriteString(fmt.Sprintf("  %s  %s\n", key, desc))
+		fmt.Fprintf(&sb, "  %s  %s\n", key, desc)
 	}
 
 	sb.WriteString("\n")

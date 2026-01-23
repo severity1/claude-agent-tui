@@ -101,6 +101,19 @@ func TestModel_Bindings_ReturnsCopy(t *testing.T) {
 	if result[0].Key != "Enter" {
 		t.Errorf("Bindings()[0].Key = %q, want %q", result[0].Key, "Enter")
 	}
+
+	// Verify mutation isolation - modifying returned slice should not affect model
+	result[0].Key = "MODIFIED"
+	result = append(result, keyhints.Binding{Key: "New", Desc: "Added"})
+
+	// Get fresh copy and verify original is unchanged
+	fresh := m.Bindings()
+	if len(fresh) != 1 {
+		t.Errorf("After mutation: Bindings() length = %d, want 1 (slice grew unexpectedly)", len(fresh))
+	}
+	if fresh[0].Key != "Enter" {
+		t.Errorf("After mutation: Bindings()[0].Key = %q, want %q (value was mutated)", fresh[0].Key, "Enter")
+	}
 }
 
 // ============================================================================
@@ -311,7 +324,7 @@ func TestNew_WithDefaultVisible_InvalidValue(t *testing.T) {
 	}
 }
 
-func TestModel_Toggle(t *testing.T) {
+func TestModel_ToggleExpanded(t *testing.T) {
 	m := keyhints.New(nil)
 
 	// Initially expanded
@@ -320,15 +333,15 @@ func TestModel_Toggle(t *testing.T) {
 	}
 
 	// Toggle to collapsed
-	m.Toggle()
+	m.ToggleExpanded()
 	if m.Expanded() {
-		t.Error("After first Toggle(), should be collapsed")
+		t.Error("After first ToggleExpanded(), should be collapsed")
 	}
 
 	// Toggle back to expanded
-	m.Toggle()
+	m.ToggleExpanded()
 	if !m.Expanded() {
-		t.Error("After second Toggle(), should be expanded")
+		t.Error("After second ToggleExpanded(), should be expanded")
 	}
 }
 
@@ -454,10 +467,13 @@ func TestNew_DefaultNotFocused(t *testing.T) {
 func TestModel_Focus(t *testing.T) {
 	m := keyhints.New(nil)
 
-	m.Focus()
+	cmd := m.Focus()
 
 	if !m.Focused() {
 		t.Error("Focus() should set focused state")
+	}
+	if cmd != nil {
+		t.Error("Focus() should return nil (no cursor blink for keyhints)")
 	}
 }
 
@@ -480,12 +496,9 @@ func TestModel_View_FocusedShowsIndicator(t *testing.T) {
 	m.Focus()
 
 	view := m.View()
-	// Should have focus indicator prefix
-	if !strings.HasPrefix(view, "\x1b") { // ANSI escape for styled ">"
-		// Check for raw ">" in case no styling
-		if !strings.Contains(view, ">") {
-			t.Errorf("View() when focused should contain '>' indicator")
-		}
+	// Should have focus indicator - either styled (ANSI escape) or raw ">"
+	if !strings.Contains(view, ">") {
+		t.Errorf("View() when focused should contain '>' indicator, got: %q", view)
 	}
 }
 
@@ -689,5 +702,87 @@ func TestNew_WithHelpStyle(t *testing.T) {
 	// Just verify it renders without error
 	if !strings.Contains(view, "Enter") {
 		t.Errorf("ViewHelp() missing 'Enter'")
+	}
+}
+
+// ============================================================================
+// Width-Based Truncation Tests
+// ============================================================================
+
+func TestModel_View_WithWidth_TruncatesWhenNeeded(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit"},
+		{Key: "Esc", Desc: "Clear"},
+		{Key: "Tab", Desc: "Next"},
+		{Key: "Ctrl+C", Desc: "Quit"},
+	}
+	// Set a narrow width that can't fit all bindings
+	m := keyhints.New(bindings, keyhints.WithWidth(40))
+
+	view := m.View()
+	// Should show truncation indicator
+	if !strings.Contains(view, "more") {
+		t.Errorf("View() with narrow width should contain 'more' indicator, got: %q", view)
+	}
+}
+
+func TestModel_View_WithWidth_ShowsAllWhenFits(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+	}
+	// Set a wide width that can fit all bindings
+	m := keyhints.New(bindings, keyhints.WithWidth(200))
+
+	view := m.View()
+	// Should NOT show truncation indicator
+	if strings.Contains(view, "more") {
+		t.Errorf("View() with wide width should NOT contain 'more' indicator, got: %q", view)
+	}
+	// Should contain both bindings
+	if !strings.Contains(view, "a") {
+		t.Errorf("View() should contain 'a'")
+	}
+	if !strings.Contains(view, "b") {
+		t.Errorf("View() should contain 'b'")
+	}
+}
+
+func TestModel_View_WithWidth_UsesPlusFormat(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit long description"},
+		{Key: "Esc", Desc: "Clear input field"},
+		{Key: "Tab", Desc: "Next field"},
+	}
+	// Set a narrow width
+	m := keyhints.New(bindings, keyhints.WithWidth(50))
+
+	view := m.View()
+	// Width-based truncation uses "+N more" format
+	if strings.Contains(view, "more") && !strings.Contains(view, "+") {
+		t.Errorf("Width-based truncation should use '+N more' format, got: %q", view)
+	}
+}
+
+// ============================================================================
+// SetBindings Mutation Isolation Tests
+// ============================================================================
+
+func TestModel_SetBindings_ClonesInput(t *testing.T) {
+	m := keyhints.New(nil)
+
+	original := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit"},
+	}
+	m.SetBindings(original)
+
+	// Mutate the original slice
+	original[0].Key = "MODIFIED"
+
+	// Get bindings from model - should be unchanged
+	result := m.Bindings()
+	if result[0].Key != "Enter" {
+		t.Errorf("SetBindings should clone input - mutation affected model: got %q, want %q",
+			result[0].Key, "Enter")
 	}
 }

@@ -2,11 +2,14 @@ package chatinput
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/aymanbagabas/go-osc52/v2"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
-	"golang.design/x/clipboard"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // DefaultHistorySize is the default maximum number of history entries.
@@ -18,9 +21,14 @@ type SubmitMsg struct {
 }
 
 // CopiedMsg is emitted when the input content is copied to clipboard.
+// Uses OSC 52 escape sequences which work cross-platform in modern terminals
+// including over SSH, tmux, and Wayland sessions.
+//
+// Note: OSC 52 is a "fire and forget" operation - the terminal handles the
+// actual clipboard write. Err is always nil for OSC 52 (kept for API compatibility).
 type CopiedMsg struct {
 	Text string
-	Err  error
+	Err  error // Always nil for OSC 52; kept for API compatibility
 }
 
 // Model represents the chat input component state.
@@ -77,11 +85,16 @@ func WithHeight(h int) Option {
 }
 
 // WithHistorySize sets the maximum number of history entries.
+// Values <= 0 are ignored and DefaultHistorySize (100) is used instead.
+// This is intentional: negative values have no semantic meaning for history size,
+// and zero would disable history entirely which should be explicit via a separate option.
 func WithHistorySize(n int) Option {
 	return func(m *Model) {
 		if n > 0 {
 			m.historySize = n
 		}
+		// Note: Invalid values (n <= 0) fall through to default.
+		// This is intentional per the documented behavior.
 	}
 }
 
@@ -172,21 +185,25 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.historyDown()
 		return true, nil
 
-	case msg.String() == "ctrl+shift+c":
-		return true, m.handleCopy()
+	case msg.Type == tea.KeyCtrlY, msg.String() == "ctrl+shift+c":
+		// Ctrl+Y (reliable, traditional Unix "yank") or Ctrl+Shift+C (if terminal supports it)
+		return true, m.CopyCmd()
 	}
 	return false, nil
 }
 
-// handleCopy copies the current value to the system clipboard.
-func (m *Model) handleCopy() tea.Cmd {
+// CopyCmd returns a command that copies the current value to the system clipboard
+// using OSC 52 escape sequences. This works cross-platform in modern terminals
+// including over SSH, tmux, and Wayland sessions.
+//
+// Can be triggered programmatically or via Ctrl+Y (recommended) or Ctrl+Shift+C.
+// Note: Ctrl+Shift+C may not work in all terminals as some intercept it for their
+// own copy function. Ctrl+Y is the traditional Unix "yank" key and works reliably.
+func (m *Model) CopyCmd() tea.Cmd {
 	text := m.textarea.Value()
 	return func() tea.Msg {
-		err := clipboard.Init()
-		if err != nil {
-			return CopiedMsg{Text: text, Err: err}
-		}
-		clipboard.Write(clipboard.FmtText, []byte(text))
+		// OSC 52 writes to terminal's clipboard via escape sequence
+		osc52.New(text).WriteTo(os.Stderr)
 		return CopiedMsg{Text: text, Err: nil}
 	}
 }
@@ -253,24 +270,21 @@ func (m Model) View() string {
 
 // counterView returns the character and line count display.
 func (m Model) counterView() string {
-	text := m.textarea.Value()
-	chars := len(text)
-	lines := 1
-	if text != "" {
-		lines = strings.Count(text, "\n") + 1
-	}
+	chars := m.CharCount()
+	lines := m.LineCount()
 	counter := fmt.Sprintf("%d chars, %d lines", chars, lines)
-	// Right-align if width is set
-	if m.width > 0 && len(counter) < m.width {
-		padding := m.width - len(counter)
+	// Right-align if width is set using display width (handles ANSI codes)
+	counterWidth := lipgloss.Width(counter)
+	if m.width > 0 && counterWidth < m.width {
+		padding := m.width - counterWidth
 		counter = strings.Repeat(" ", padding) + counter
 	}
 	return counter
 }
 
-// CharCount returns the current character count.
+// CharCount returns the current character count (Unicode runes, not bytes).
 func (m Model) CharCount() int {
-	return len(m.textarea.Value())
+	return utf8.RuneCountInString(m.textarea.Value())
 }
 
 // LineCount returns the current line count.

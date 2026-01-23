@@ -159,18 +159,6 @@ func (c *ClientAdapter) QueryCmd(prompt string) tea.Cmd {
 			}
 		}
 
-		if client == nil {
-			return ClientStateMsg{
-				State: ClientStateError,
-				Error: fmt.Errorf("cannot query: client is nil"),
-			}
-		}
-
-		// Use background context if no context set
-		if ctx == nil {
-			ctx = context.Background()
-		}
-
 		// Send the query
 		if err := client.Query(ctx, prompt); err != nil {
 			c.setState(ClientStateError)
@@ -210,18 +198,6 @@ func (c *ClientAdapter) InterruptCmd() tea.Cmd {
 		// Not streaming - no-op, return current state
 		if state != ClientStateStreaming {
 			return ClientStateMsg{State: state}
-		}
-
-		if client == nil {
-			return ClientStateMsg{
-				State: ClientStateError,
-				Error: fmt.Errorf("cannot interrupt: client is nil"),
-			}
-		}
-
-		// Use background context if no context set
-		if ctx == nil {
-			ctx = context.Background()
 		}
 
 		// Send interrupt signal
