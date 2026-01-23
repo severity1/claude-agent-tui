@@ -25,6 +25,7 @@
 //   - WithCollapsed(): Start in collapsed state
 //   - WithFocusStyle(style lipgloss.Style): Set style for focus indicator
 //   - WithHelpStyle(style lipgloss.Style): Set style for help window border
+//   - WithPadding(padding string): Set left padding for inline views (default 1 space)
 //
 // Binding management:
 //   - SetBindings(bindings []Binding): Replace all bindings

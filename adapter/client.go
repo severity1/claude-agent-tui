@@ -93,7 +93,8 @@ func (c *ClientAdapter) State() ClientState {
 	return c.state
 }
 
-// setState updates the internal state (must be called with lock held or within command).
+// setState updates the internal state. This method acquires its own lock
+// and should only be called from command functions (outside the main lock).
 func (c *ClientAdapter) setState(state ClientState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

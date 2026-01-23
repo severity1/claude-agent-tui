@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/severity1/claude-agent-tui/component/input/chatinput"
 )
 
@@ -677,6 +679,36 @@ func TestNew_WithLineNumbers_False(t *testing.T) {
 // Copy to Clipboard Tests (OSC 52)
 // ============================================================================
 
+// extractCopiedMsg executes a batch command and extracts the CopiedMsg.
+// CopyCmd returns a tea.BatchMsg containing both the clipboard command and flash timer.
+func extractCopiedMsg(t *testing.T, cmd tea.Cmd) chatinput.CopiedMsg {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("cmd is nil")
+	}
+
+	// Execute the batch command
+	msg := cmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want tea.BatchMsg", msg)
+	}
+
+	// Execute each command in the batch and find CopiedMsg
+	for _, batchCmd := range batchMsg {
+		if batchCmd == nil {
+			continue
+		}
+		result := batchCmd()
+		if copiedMsg, ok := result.(chatinput.CopiedMsg); ok {
+			return copiedMsg
+		}
+	}
+
+	t.Fatal("batch did not contain CopiedMsg")
+	return chatinput.CopiedMsg{}
+}
+
 func TestModel_CopyCmd_ReturnsCopiedMsg(t *testing.T) {
 	m := chatinput.New()
 	m.Focus()
@@ -688,12 +720,8 @@ func TestModel_CopyCmd_ReturnsCopiedMsg(t *testing.T) {
 		t.Fatal("CopyCmd() returned nil, want non-nil command")
 	}
 
-	// Execute the command
-	msg := cmd()
-	copiedMsg, ok := msg.(chatinput.CopiedMsg)
-	if !ok {
-		t.Fatalf("cmd() returned %T, want chatinput.CopiedMsg", msg)
-	}
+	// Extract CopiedMsg from batch
+	copiedMsg := extractCopiedMsg(t, cmd)
 
 	// Verify the copied text
 	if copiedMsg.Text != "text to copy" {
@@ -716,11 +744,7 @@ func TestModel_CopyCmd_EmptyText(t *testing.T) {
 		t.Fatal("CopyCmd() returned nil for empty text, want non-nil command")
 	}
 
-	msg := cmd()
-	copiedMsg, ok := msg.(chatinput.CopiedMsg)
-	if !ok {
-		t.Fatalf("cmd() returned %T, want chatinput.CopiedMsg", msg)
-	}
+	copiedMsg := extractCopiedMsg(t, cmd)
 
 	if copiedMsg.Text != "" {
 		t.Errorf("CopiedMsg.Text = %q, want empty string", copiedMsg.Text)
@@ -733,8 +757,7 @@ func TestModel_CopyCmd_MultilineText(t *testing.T) {
 	m.SetValue("line1\nline2\nline3")
 
 	cmd := m.CopyCmd()
-	msg := cmd()
-	copiedMsg := msg.(chatinput.CopiedMsg)
+	copiedMsg := extractCopiedMsg(t, cmd)
 
 	if copiedMsg.Text != "line1\nline2\nline3" {
 		t.Errorf("CopiedMsg.Text = %q, want multiline text", copiedMsg.Text)
@@ -747,8 +770,7 @@ func TestModel_CopyCmd_UnicodeText(t *testing.T) {
 	m.SetValue("Hello 世界 🌍")
 
 	cmd := m.CopyCmd()
-	msg := cmd()
-	copiedMsg := msg.(chatinput.CopiedMsg)
+	copiedMsg := extractCopiedMsg(t, cmd)
 
 	if copiedMsg.Text != "Hello 世界 🌍" {
 		t.Errorf("CopiedMsg.Text = %q, want unicode text", copiedMsg.Text)
@@ -768,12 +790,8 @@ func TestModel_Update_CtrlY_TriggersCopy(t *testing.T) {
 		t.Fatal("Update() returned nil cmd for Ctrl+Y, want CopyCmd")
 	}
 
-	// Execute and verify it's a CopiedMsg
-	result := cmd()
-	copiedMsg, ok := result.(chatinput.CopiedMsg)
-	if !ok {
-		t.Fatalf("cmd() returned %T, want chatinput.CopiedMsg", result)
-	}
+	// Extract and verify CopiedMsg from batch
+	copiedMsg := extractCopiedMsg(t, cmd)
 
 	if copiedMsg.Text != "text to copy" {
 		t.Errorf("CopiedMsg.Text = %q, want %q", copiedMsg.Text, "text to copy")
@@ -789,6 +807,37 @@ func TestCopiedMsg_Type(t *testing.T) {
 	}
 	if msg.Err != nil {
 		t.Errorf("CopiedMsg.Err = %v, want nil", msg.Err)
+	}
+}
+
+// ============================================================================
+// Flash Animation Tests
+// ============================================================================
+
+func TestModel_CopyCmd_SetsFlashing(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	m.SetValue("text")
+
+	// Before copy, flashing should be false
+	if m.Flashing() {
+		t.Error("Flashing() = true before CopyCmd, want false")
+	}
+
+	// Call CopyCmd
+	m.CopyCmd()
+
+	// After copy, flashing should be true
+	if !m.Flashing() {
+		t.Error("Flashing() = false after CopyCmd, want true")
+	}
+}
+
+func TestModel_Flashing_DefaultFalse(t *testing.T) {
+	m := chatinput.New()
+
+	if m.Flashing() {
+		t.Error("Flashing() = true for new model, want false")
 	}
 }
 
@@ -846,5 +895,431 @@ func TestCharCount_Unicode(t *testing.T) {
 					got, tt.want, tt.input, len(tt.input))
 			}
 		})
+	}
+}
+
+// ============================================================================
+// Styling Tests
+// ============================================================================
+
+func TestNew_DefaultStyles(t *testing.T) {
+	m := chatinput.New()
+
+	// Default prompt should be empty string
+	if m.Prompt() != "" {
+		t.Errorf("Prompt() = %q, want empty string", m.Prompt())
+	}
+}
+
+func TestNew_WithPrompt(t *testing.T) {
+	m := chatinput.New(chatinput.WithPrompt("$ "))
+
+	if m.Prompt() != "$ " {
+		t.Errorf("Prompt() = %q, want %q", m.Prompt(), "$ ")
+	}
+}
+
+func TestNew_WithPrompt_Empty(t *testing.T) {
+	m := chatinput.New(chatinput.WithPrompt(""))
+
+	// Empty prompt should be allowed
+	if m.Prompt() != "" {
+		t.Errorf("Prompt() = %q, want empty string", m.Prompt())
+	}
+}
+
+func TestModel_View_DefaultStyleHasNoVisibleBorder(t *testing.T) {
+	m := chatinput.New()
+
+	view := m.View()
+
+	// Default style now uses background instead of border
+	// Should NOT contain rounded border characters
+	if strings.Contains(view, "\u256d") || strings.Contains(view, "╭") {
+		t.Errorf("View() should not contain rounded border with background style, got: %s", view)
+	}
+}
+
+func TestModel_View_ContainsPrompt(t *testing.T) {
+	m := chatinput.New(chatinput.WithPrompt(">>> "))
+
+	view := m.View()
+
+	// View should contain the prompt
+	if !strings.Contains(view, ">>>") {
+		t.Errorf("View() should contain prompt '>>>', got: %s", view)
+	}
+}
+
+func TestModel_View_FocusUseCursor(t *testing.T) {
+	// Focus is indicated by cursor visibility, not background change
+	// The textarea styles are the same for both focus states
+	m := chatinput.New()
+
+	// Get unfocused view
+	unfocusedView := m.View()
+
+	// Focus and get focused view
+	m.Focus()
+	focusedView := m.View()
+
+	// Both views render without error
+	if unfocusedView == "" {
+		t.Error("unfocused View() returned empty string")
+	}
+	if focusedView == "" {
+		t.Error("focused View() returned empty string")
+	}
+}
+
+func TestNew_WithPromptStyle(t *testing.T) {
+	// Custom prompt style
+	customStyle := lipgloss.NewStyle().Bold(true)
+	m := chatinput.New(chatinput.WithPromptStyle(customStyle))
+
+	// Model should be created without error
+	if m.Prompt() != "" {
+		t.Errorf("WithPromptStyle should not affect prompt text, got %q", m.Prompt())
+	}
+}
+
+// ============================================================================
+// Runtime Width/Height Tests
+// ============================================================================
+
+func TestModel_SetWidth(t *testing.T) {
+	m := chatinput.New()
+
+	m.SetWidth(100)
+
+	if m.Width() != 100 {
+		t.Errorf("Width() = %d after SetWidth(100), want 100", m.Width())
+	}
+}
+
+func TestModel_Width_ReturnsConfiguredWidth(t *testing.T) {
+	m := chatinput.New(chatinput.WithWidth(80))
+
+	if m.Width() != 80 {
+		t.Errorf("Width() = %d, want 80", m.Width())
+	}
+}
+
+func TestModel_Width_ReturnsZeroIfNotSet(t *testing.T) {
+	m := chatinput.New()
+
+	if m.Width() != 0 {
+		t.Errorf("Width() = %d for new model without width, want 0", m.Width())
+	}
+}
+
+func TestModel_SetWidth_OverridesWithWidth(t *testing.T) {
+	m := chatinput.New(chatinput.WithWidth(60))
+
+	// Override at runtime
+	m.SetWidth(120)
+
+	if m.Width() != 120 {
+		t.Errorf("Width() = %d after SetWidth override, want 120", m.Width())
+	}
+}
+
+func TestModel_SetWidth_UpdatesCounter(t *testing.T) {
+	m := chatinput.New(chatinput.WithShowCounter(true))
+	m.SetValue("hello")
+
+	// Set width and verify counter aligns
+	m.SetWidth(80)
+
+	view := m.View()
+	// Counter should be present
+	if !strings.Contains(view, "5 chars") {
+		t.Errorf("View() missing char count after SetWidth, got: %s", view)
+	}
+}
+
+func TestModel_SetHeight(t *testing.T) {
+	m := chatinput.New()
+
+	m.SetHeight(10)
+
+	// Height is internal to textarea, verify model works after change
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string after SetHeight")
+	}
+}
+
+func TestModel_SetSize(t *testing.T) {
+	m := chatinput.New()
+
+	m.SetSize(100, 5)
+
+	// Width should be updated
+	if m.Width() != 100 {
+		t.Errorf("Width() = %d after SetSize(100, 5), want 100", m.Width())
+	}
+
+	// Verify model renders correctly
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string after SetSize")
+	}
+}
+
+func TestModel_SetSize_UpdatesBoth(t *testing.T) {
+	m := chatinput.New(chatinput.WithWidth(50), chatinput.WithHeight(3))
+
+	// Update both dimensions
+	m.SetSize(120, 8)
+
+	if m.Width() != 120 {
+		t.Errorf("Width() = %d after SetSize, want 120", m.Width())
+	}
+}
+
+// ============================================================================
+// Auto-Expanding Height Tests
+// ============================================================================
+
+func TestNew_WithMinHeight(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(3))
+
+	if m.MinHeight() != 3 {
+		t.Errorf("MinHeight() = %d, want 3", m.MinHeight())
+	}
+}
+
+func TestNew_WithMaxHeight(t *testing.T) {
+	m := chatinput.New(chatinput.WithMaxHeight(8))
+
+	if m.MaxHeight() != 8 {
+		t.Errorf("MaxHeight() = %d, want 8", m.MaxHeight())
+	}
+}
+
+func TestNew_DefaultMinMaxHeight(t *testing.T) {
+	m := chatinput.New()
+
+	// Default minHeight is 1
+	if m.MinHeight() != 1 {
+		t.Errorf("MinHeight() = %d, want 1 (default)", m.MinHeight())
+	}
+
+	// Default maxHeight is 10
+	if m.MaxHeight() != 10 {
+		t.Errorf("MaxHeight() = %d, want 10 (default)", m.MaxHeight())
+	}
+}
+
+func TestModel_Height_SingleLine(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(1), chatinput.WithMaxHeight(5))
+	m.SetValue("hello")
+
+	// Single line content should have height of 1
+	if m.Height() != 1 {
+		t.Errorf("Height() = %d for single line, want 1", m.Height())
+	}
+}
+
+func TestModel_Height_MultiLine(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(1), chatinput.WithMaxHeight(5))
+	m.SetValue("line1\nline2\nline3")
+
+	// Three lines should have height of 3
+	if m.Height() != 3 {
+		t.Errorf("Height() = %d for 3 lines, want 3", m.Height())
+	}
+}
+
+func TestModel_Height_ClampedToMin(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(3), chatinput.WithMaxHeight(10))
+	m.SetValue("single line")
+
+	// Even with single line, height should be clamped to minHeight
+	if m.Height() != 3 {
+		t.Errorf("Height() = %d, want 3 (minHeight)", m.Height())
+	}
+}
+
+func TestModel_Height_ClampedToMax(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(1), chatinput.WithMaxHeight(3))
+	m.SetValue("line1\nline2\nline3\nline4\nline5")
+
+	// Five lines should be clamped to maxHeight of 3
+	if m.Height() != 3 {
+		t.Errorf("Height() = %d, want 3 (maxHeight)", m.Height())
+	}
+}
+
+func TestModel_Height_UnlimitedMax(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(1), chatinput.WithMaxHeight(0))
+	m.SetValue("line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12")
+
+	// With maxHeight=0 (unlimited), height equals line count
+	if m.Height() != 12 {
+		t.Errorf("Height() = %d with unlimited max, want 12", m.Height())
+	}
+}
+
+func TestModel_SetMinHeight(t *testing.T) {
+	m := chatinput.New()
+	m.SetMinHeight(5)
+
+	if m.MinHeight() != 5 {
+		t.Errorf("MinHeight() = %d after SetMinHeight(5), want 5", m.MinHeight())
+	}
+}
+
+func TestModel_SetMaxHeight(t *testing.T) {
+	m := chatinput.New()
+	m.SetMaxHeight(15)
+
+	if m.MaxHeight() != 15 {
+		t.Errorf("MaxHeight() = %d after SetMaxHeight(15), want 15", m.MaxHeight())
+	}
+}
+
+func TestModel_SetMinHeight_InvalidValue(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(3))
+	m.SetMinHeight(0) // Invalid, should be ignored
+
+	if m.MinHeight() != 3 {
+		t.Errorf("MinHeight() = %d after SetMinHeight(0), want 3 (unchanged)", m.MinHeight())
+	}
+}
+
+func TestModel_SetMaxHeight_ZeroAllowed(t *testing.T) {
+	m := chatinput.New()
+	m.SetMaxHeight(0) // 0 means unlimited
+
+	if m.MaxHeight() != 0 {
+		t.Errorf("MaxHeight() = %d after SetMaxHeight(0), want 0", m.MaxHeight())
+	}
+}
+
+func TestWithMinHeight_InvalidValue(t *testing.T) {
+	m := chatinput.New(chatinput.WithMinHeight(-1))
+
+	// Invalid value should keep default
+	if m.MinHeight() != 1 {
+		t.Errorf("MinHeight() = %d with invalid option, want 1 (default)", m.MinHeight())
+	}
+}
+
+// ============================================================================
+// Info Bar Tests
+// ============================================================================
+
+func TestNew_WithInfoBar(t *testing.T) {
+	m := chatinput.New(chatinput.WithInfoBar("Claude Sonnet 4.5"))
+
+	if m.InfoBar() != "Claude Sonnet 4.5" {
+		t.Errorf("InfoBar() = %q, want %q", m.InfoBar(), "Claude Sonnet 4.5")
+	}
+}
+
+func TestNew_DefaultInfoBar(t *testing.T) {
+	m := chatinput.New()
+
+	// Default info bar is empty
+	if m.InfoBar() != "" {
+		t.Errorf("InfoBar() = %q, want empty string (default)", m.InfoBar())
+	}
+}
+
+func TestModel_SetInfoBar(t *testing.T) {
+	m := chatinput.New()
+	m.SetInfoBar("GPT-4")
+
+	if m.InfoBar() != "GPT-4" {
+		t.Errorf("InfoBar() = %q after SetInfoBar, want %q", m.InfoBar(), "GPT-4")
+	}
+}
+
+func TestModel_SetInfoBar_Empty(t *testing.T) {
+	m := chatinput.New(chatinput.WithInfoBar("initial"))
+	m.SetInfoBar("")
+
+	if m.InfoBar() != "" {
+		t.Errorf("InfoBar() = %q after SetInfoBar(''), want empty", m.InfoBar())
+	}
+}
+
+func TestModel_View_WithInfoBar(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithInfoBar("Claude Opus 4"),
+	)
+
+	view := m.View()
+
+	// View should contain the info bar text
+	if !strings.Contains(view, "Claude Opus 4") {
+		t.Errorf("View() should contain info bar text, got: %s", view)
+	}
+}
+
+func TestModel_View_WithoutInfoBar(t *testing.T) {
+	m := chatinput.New(chatinput.WithWidth(60))
+
+	view := m.View()
+
+	// View should render without error when no info bar is set
+	if view == "" {
+		t.Error("View() returned empty string without info bar")
+	}
+}
+
+func TestNew_WithInfoStyle(t *testing.T) {
+	customStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	m := chatinput.New(chatinput.WithInfoStyle(customStyle))
+
+	// Model should be created without error
+	if m.InfoBar() != "" {
+		t.Errorf("WithInfoStyle should not affect info bar text, got %q", m.InfoBar())
+	}
+}
+
+// ============================================================================
+// View Structure Tests (Auto-expand + Info Bar)
+// ============================================================================
+
+func TestModel_View_AutoExpands(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithMinHeight(1),
+		chatinput.WithMaxHeight(5),
+	)
+
+	// Start with single line
+	m.SetValue("line1")
+	view1 := m.View()
+
+	// Add more lines
+	m.SetValue("line1\nline2\nline3")
+	view2 := m.View()
+
+	// View should be taller with more content (more lines in output)
+	lines1 := strings.Count(view1, "\n")
+	lines2 := strings.Count(view2, "\n")
+
+	if lines2 <= lines1 {
+		t.Errorf("View with 3 lines of content (%d newlines) should be taller than 1 line (%d newlines)",
+			lines2, lines1)
+	}
+}
+
+func TestModel_View_ContainerPadding(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithInfoBar("Test Model"),
+	)
+
+	view := m.View()
+
+	// View should contain the thick border characters
+	if !strings.Contains(view, "┃") {
+		t.Errorf("View() should contain thick border character, got: %s", view)
 	}
 }

@@ -488,7 +488,7 @@ func TestModel_Blur(t *testing.T) {
 	}
 }
 
-func TestModel_View_FocusedShowsIndicator(t *testing.T) {
+func TestModel_View_FocusedShowsBorder(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
 	}
@@ -496,13 +496,13 @@ func TestModel_View_FocusedShowsIndicator(t *testing.T) {
 	m.Focus()
 
 	view := m.View()
-	// Should have focus indicator - either styled (ANSI escape) or raw ">"
-	if !strings.Contains(view, ">") {
-		t.Errorf("View() when focused should contain '>' indicator, got: %q", view)
+	// Should have left border (thick border character)
+	if !strings.Contains(view, "\u2503") && !strings.Contains(view, "┃") {
+		t.Errorf("View() when focused should contain thick border character, got: %q", view)
 	}
 }
 
-func TestModel_View_UnfocusedNoIndicator(t *testing.T) {
+func TestModel_View_UnfocusedHasBorder(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
 	}
@@ -510,9 +510,9 @@ func TestModel_View_UnfocusedNoIndicator(t *testing.T) {
 	// Not focused by default
 
 	view := m.View()
-	// Should NOT start with indicator when not focused
-	if strings.HasPrefix(view, "> ") {
-		t.Errorf("View() when unfocused should not start with '> '")
+	// Should have left border (thick border character) in unfocused state too
+	if !strings.Contains(view, "\u2503") && !strings.Contains(view, "┃") {
+		t.Errorf("View() when unfocused should contain thick border character, got: %q", view)
 	}
 }
 
@@ -784,5 +784,132 @@ func TestModel_SetBindings_ClonesInput(t *testing.T) {
 	if result[0].Key != "Enter" {
 		t.Errorf("SetBindings should clone input - mutation affected model: got %q, want %q",
 			result[0].Key, "Enter")
+	}
+}
+
+// ============================================================================
+// Padding Tests
+// ============================================================================
+
+func TestNew_DefaultPadding(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit"},
+	}
+	m := keyhints.New(bindings)
+
+	view := m.View()
+	// Default padding is empty string, view starts with border character
+	if !strings.Contains(view, "\u2503") && !strings.Contains(view, "┃") {
+		t.Errorf("View() should contain border character, got: %q", view)
+	}
+}
+
+func TestNew_WithPadding(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit"},
+	}
+	m := keyhints.New(bindings, keyhints.WithPadding("   ")) // 3 spaces
+
+	view := m.View()
+	// Padding is applied inside the border, so content should contain the padding followed by key
+	if !strings.Contains(view, "   Enter") {
+		t.Errorf("View() should contain custom padding before key, got: %q", view)
+	}
+}
+
+func TestNew_WithPadding_Empty(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit"},
+	}
+	m := keyhints.New(bindings, keyhints.WithPadding("")) // no padding
+
+	view := m.View()
+	// Should contain border and content
+	if !strings.Contains(view, "Enter") {
+		t.Errorf("View() with empty padding should contain binding key, got: %q", view)
+	}
+}
+
+func TestModel_View_AppliesPadding(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
+
+	view := m.View()
+	// Padding is applied inside the border
+	if !strings.Contains(view, ">>a") {
+		t.Errorf("View() should apply custom padding before key, got: %q", view)
+	}
+}
+
+func TestModel_ViewCompact_AppliesPadding(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+	}
+	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
+
+	view := m.ViewCompact()
+	// Padding is applied, ViewCompact does not use border wrapper
+	if !strings.Contains(view, ">>") {
+		t.Errorf("ViewCompact() should apply custom padding, got: %q", view)
+	}
+}
+
+func TestModel_ViewHelp_NoPadding(t *testing.T) {
+	// ViewHelp should NOT apply padding - the box has its own styling
+	// and prepending padding would break the border alignment
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
+
+	view := m.ViewHelp()
+	// Should NOT start with padding - should start with box border
+	if strings.HasPrefix(view, ">>") {
+		t.Errorf("ViewHelp() should NOT apply padding prefix, got: %q", view[:50])
+	}
+	// Should start with box border character
+	if !strings.HasPrefix(view, "╭") {
+		t.Errorf("ViewHelp() should start with box border, got: %q", view[:20])
+	}
+}
+
+func TestModel_View_FocusedWithPadding(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithPadding("  ")) // 2 spaces
+	m.Focus()
+
+	view := m.View()
+	// View should contain the binding and border
+	if !strings.Contains(view, "a") {
+		t.Errorf("View() when focused should contain binding, got: %q", view)
+	}
+	// Should contain border character
+	if !strings.Contains(view, "\u2503") && !strings.Contains(view, "┃") {
+		t.Errorf("View() when focused should contain border, got: %q", view)
+	}
+}
+
+func TestModel_ViewCompact_EmptyWithPadding(t *testing.T) {
+	// Empty bindings should return empty string regardless of padding
+	m := keyhints.New(nil, keyhints.WithPadding(">>"))
+
+	view := m.ViewCompact()
+	if view != "" {
+		t.Errorf("ViewCompact() with empty bindings should return empty string, got: %q", view)
+	}
+}
+
+func TestModel_View_EmptyWithPadding(t *testing.T) {
+	// Empty bindings should return empty string regardless of padding
+	m := keyhints.New(nil, keyhints.WithPadding(">>"))
+
+	view := m.View()
+	if view != "" {
+		t.Errorf("View() with empty bindings should return empty string, got: %q", view)
 	}
 }

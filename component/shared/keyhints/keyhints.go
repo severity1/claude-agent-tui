@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/severity1/claude-agent-tui/style"
 )
 
 // Binding represents a single keybinding with its description.
@@ -19,6 +20,10 @@ type Binding struct {
 // DefaultVisibleCount is the default number of hints shown when collapsed.
 const DefaultVisibleCount = 3
 
+// DefaultPadding is the default left padding for inline hints view.
+// Empty by default since the left border provides visual separation.
+const DefaultPadding = ""
+
 // Model represents the keyhints component state.
 type Model struct {
 	bindings       []Binding
@@ -28,6 +33,7 @@ type Model struct {
 	sepStyle       lipgloss.Style
 	focusStyle     lipgloss.Style // style applied when focused
 	helpStyle      lipgloss.Style // style for the help window border
+	padding        string         // left padding for inline views
 	width          int
 	expanded       bool // whether all bindings are visible in inline view
 	defaultVisible int  // number of bindings to show when collapsed
@@ -43,11 +49,12 @@ func New(bindings []Binding, opts ...Option) Model {
 	m := Model{
 		bindings:       bindings,
 		separator:      " | ",
-		keyStyle:       lipgloss.NewStyle().Bold(true),
-		descStyle:      lipgloss.NewStyle(),
-		sepStyle:       lipgloss.NewStyle().Faint(true),
-		focusStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("212")), // pink highlight
-		helpStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240")).Padding(1, 2),
+		keyStyle:       lipgloss.NewStyle().Bold(true).Foreground(style.TextMuted),
+		descStyle:      lipgloss.NewStyle().Foreground(style.TextMuted),
+		sepStyle:       lipgloss.NewStyle().Faint(true).Foreground(style.TextMuted),
+		focusStyle:     lipgloss.NewStyle().Foreground(style.Primary),
+		helpStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(style.Border).Padding(1, 2),
+		padding:        DefaultPadding,
 		expanded:       true, // show all by default for backwards compatibility
 		defaultVisible: DefaultVisibleCount,
 	}
@@ -125,6 +132,14 @@ func WithFocusStyle(style lipgloss.Style) Option {
 func WithHelpStyle(style lipgloss.Style) Option {
 	return func(m *Model) {
 		m.helpStyle = style
+	}
+}
+
+// WithPadding sets the left padding for inline views (View and ViewCompact).
+// Use empty string "" to disable padding. Default is DefaultPadding (1 space).
+func WithPadding(padding string) Option {
+	return func(m *Model) {
+		m.padding = padding
 	}
 }
 
@@ -248,10 +263,9 @@ func (m Model) View() string {
 	var parts []string
 	currentWidth := 0
 
-	// Account for focus indicator width if focused
-	if m.focused {
-		currentWidth = lipgloss.Width("> ")
-	}
+	// Account for border width (1 character + border padding)
+	borderWidth := 2 // left border character + internal padding
+	currentWidth = borderWidth
 
 	for i, b := range bindings {
 		key := m.keyStyle.Render(b.Key)
@@ -295,16 +309,25 @@ func (m Model) View() string {
 
 	result := strings.Join(parts, sep)
 
-	// Add focus indicator
-	if m.focused {
-		prefix := m.focusStyle.Render("> ")
-		result = prefix + result
-	}
+	// Apply left padding
+	result = m.padding + result
 
-	return result
+	// Wrap with left border - use Primary color when focused, Border color when unfocused
+	borderColor := style.Border
+	if m.focused {
+		borderColor = style.Primary
+	}
+	borderStyle := lipgloss.NewStyle().
+		BorderLeft(true).
+		BorderStyle(lipgloss.ThickBorder()).
+		BorderForeground(borderColor).
+		PaddingLeft(1)
+
+	return borderStyle.Render(result)
 }
 
 // ViewCompact renders a more compact version with just keys.
+// Left padding is applied consistently with View().
 func (m Model) ViewCompact() string {
 	if len(m.bindings) == 0 {
 		return ""
@@ -316,7 +339,7 @@ func (m Model) ViewCompact() string {
 	}
 
 	sep := m.sepStyle.Render(m.separator)
-	return strings.Join(parts, sep)
+	return m.padding + strings.Join(parts, sep)
 }
 
 // ViewHelp renders a boxed help window showing all keybindings.
@@ -353,5 +376,7 @@ func (m Model) ViewHelp() string {
 	sb.WriteString("\n")
 	sb.WriteString(m.sepStyle.Render("Press ? or Esc to close"))
 
+	// Note: ViewHelp does NOT apply padding - the box has its own styling
+	// and prepending padding would break the border alignment
 	return m.helpStyle.Render(sb.String())
 }

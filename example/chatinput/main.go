@@ -16,6 +16,9 @@
 //   - Ctrl+C: Quit
 //
 // Features:
+//   - Subtle background styling with focus highlight (lighter when focused)
+//   - Responsive width that adapts to terminal size
+//   - Optional prompt prefix (configured via WithPrompt)
 //   - Character/line counter
 //   - History navigation with draft preservation
 //   - Keyhints component with collapsible help window
@@ -40,14 +43,18 @@ type model struct {
 	hints    keyhints.Model
 	messages []string
 	copied   bool // show copy feedback
+	width    int  // terminal width
+	height   int  // terminal height
 }
 
 // newModel creates a new model with default state.
 func newModel() model {
 	input := chatinput.New(
 		chatinput.WithPlaceholder("Type a message..."),
-		chatinput.WithWidth(60),
-		chatinput.WithHeight(3),
+		chatinput.WithMinHeight(1),
+		chatinput.WithMaxHeight(5),
+		chatinput.WithMode("Build"),
+		chatinput.WithInfoBar("Claude Sonnet 4.5"),
 		chatinput.WithShowCounter(true),
 	)
 	// Focus the input so it accepts keyboard input immediately
@@ -79,6 +86,17 @@ func (m model) Init() tea.Cmd {
 // Update handles messages and updates the model state.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		// Full width minus small padding (no border to account for now)
+		inputWidth := msg.Width - 2
+		if inputWidth < 20 {
+			inputWidth = 20 // minimum width
+		}
+		m.input.SetWidth(inputWidth)
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -92,11 +110,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.input.Focused() {
 				m.input.Blur()
 				m.hints.Focus()
-			} else {
-				m.hints.Blur()
-				m.input.Focus()
+				return m, nil
 			}
-			return m, nil
+			// Return focus to input - return blink command for cursor
+			m.hints.Blur()
+			return m, m.input.Focus()
 		case "esc":
 			// If help is showing, close it first
 			if m.hints.ShowingHelp() {
@@ -158,8 +176,7 @@ func (m model) View() string {
 		sb.WriteString("\n")
 	}
 
-	// Display the input
-	sb.WriteString("Input:\n")
+	// Display the input (now with built-in bordered styling)
 	sb.WriteString(m.input.View())
 	sb.WriteString("\n")
 
@@ -170,6 +187,7 @@ func (m model) View() string {
 	sb.WriteString("\n")
 
 	// Display keyhints or help window
+	// Padding is now built into the keyhints component (default 1 space)
 	if m.hints.ShowingHelp() {
 		sb.WriteString(m.hints.ViewHelp())
 	} else {
