@@ -312,10 +312,10 @@ func (m Model) View() string {
 	// Apply left padding
 	result = m.padding + result
 
-	// Wrap with left border - use Primary color when focused, Border color when unfocused
-	borderColor := style.Border
+	// Wrap with left border - use focusStyle color when focused, Border color when unfocused
+	var borderColor lipgloss.TerminalColor = style.Border
 	if m.focused {
-		borderColor = style.Primary
+		borderColor = m.focusStyle.GetForeground()
 	}
 	borderStyle := lipgloss.NewStyle().
 		BorderLeft(true).

@@ -24,8 +24,24 @@
 //   - WithPlaceholder(text string): Set placeholder text
 //   - WithWidth(w int): Set initial input width
 //   - WithHeight(h int): Set initial input height
-//   - WithPrompt(prompt string): Set prompt prefix (default "> ")
+//   - WithPrompt(prompt string): Set prompt prefix (default: empty string)
 //   - WithPromptStyle(s lipgloss.Style): Customize prompt style
+//   - WithMinHeight(h int): Set minimum visible lines (default: 1)
+//   - WithMaxHeight(h int): Set maximum lines before scrolling (default: 10)
+//   - WithShowCounter(show bool): Enable character/line counter display
+//   - WithHistorySize(n int): Set max history entries (default: 100)
+//   - WithMode(mode string): Set mode indicator (e.g., "Build", "Shell")
+//   - WithModeStyle(s lipgloss.Style): Customize mode indicator style
+//   - WithInfoBar(text string): Set info bar text (e.g., "Claude Sonnet 4.5")
+//   - WithInfoStyle(s lipgloss.Style): Customize info bar style
+//
+// Visual styling options:
+//   - WithContentBackground(color lipgloss.Color): Set content background (default: style.Surface)
+//   - WithBorderStyle(border lipgloss.Border): Set border style (default: ThickBorder)
+//   - WithBorderColor(color lipgloss.Color): Set border color (default: style.Border)
+//   - WithFlashBorderColor(color lipgloss.Color): Set flash border color (default: style.Primary)
+//   - WithFlashDuration(d time.Duration): Set flash animation duration (default: 150ms)
+//   - WithBorderPadding(top, bottom int): Set internal border padding (default: 1, 1)
 //
 // Focus management:
 //   - Focus(): Set focus and return cursor blink command
@@ -42,11 +58,27 @@
 //   - SetHeight(h int): Update height at runtime
 //   - SetSize(width, height int): Update both dimensions
 //   - Width(): Get current configured width
+//   - Height(): Get current calculated display height
+//   - SetMinHeight(h int): Update minimum height at runtime
+//   - SetMaxHeight(h int): Update maximum height at runtime
+//   - MinHeight(): Get configured minimum height
+//   - MaxHeight(): Get configured maximum height
+//
+// Mode and info bar management:
+//   - Mode(): Get current mode indicator
+//   - SetMode(mode string): Update mode indicator at runtime
+//   - InfoBar(): Get current info bar text
+//   - SetInfoBar(text string): Update info bar text at runtime
+//
+// Clipboard support:
+//   - CopyCmd(): Returns tea.Cmd that copies input to clipboard via OSC 52
+//   - Flashing(): Check if copy flash animation is active
 //
 // # Messages
 //
-// The component emits SubmitMsg when the user presses Enter with non-empty input.
-// The SubmitMsg contains the submitted text and clears the input automatically.
+// The component emits these messages:
+//   - SubmitMsg: Emitted when user presses Enter with non-empty input
+//   - CopiedMsg: Emitted when content is copied to clipboard (Ctrl+Y or Ctrl+Shift+C)
 //
 // # Example
 //

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -1321,5 +1322,133 @@ func TestModel_View_ContainerPadding(t *testing.T) {
 	// View should contain the thick border characters
 	if !strings.Contains(view, "┃") {
 		t.Errorf("View() should contain thick border character, got: %s", view)
+	}
+}
+
+// ============================================================================
+// Visual Styling Options Tests
+// ============================================================================
+
+func TestNew_WithContentBackground(t *testing.T) {
+	// Should accept and apply without error
+	m := chatinput.New(chatinput.WithContentBackground(lipgloss.Color("#FF0000")))
+
+	// Verify model is created (no panic or error)
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom content background")
+	}
+}
+
+func TestNew_WithBorderStyle(t *testing.T) {
+	// Test with rounded border (different from default thick border)
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderStyle(lipgloss.RoundedBorder()),
+	)
+
+	view := m.View()
+	// Rounded border uses different characters than thick border
+	// Thick: ┃ │ Rounded: │
+	if strings.Contains(view, "┃") {
+		t.Errorf("View() with RoundedBorder should not contain thick border character ┃")
+	}
+}
+
+func TestNew_WithBorderColor(t *testing.T) {
+	// Should accept custom border color without error
+	m := chatinput.New(chatinput.WithBorderColor(lipgloss.Color("#00FF00")))
+
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom border color")
+	}
+}
+
+func TestNew_WithFlashBorderColor(t *testing.T) {
+	// Should accept custom flash border color without error
+	m := chatinput.New(chatinput.WithFlashBorderColor(lipgloss.Color("#0000FF")))
+
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom flash border color")
+	}
+}
+
+func TestNew_WithFlashDuration(t *testing.T) {
+	// Should accept custom flash duration
+	m := chatinput.New(chatinput.WithFlashDuration(200 * time.Millisecond))
+
+	// Verify model is created correctly
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom flash duration")
+	}
+}
+
+func TestNew_WithFlashDuration_Zero(t *testing.T) {
+	// Zero duration should be ignored, keeping default
+	m := chatinput.New(chatinput.WithFlashDuration(0))
+
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string when flash duration was zero")
+	}
+}
+
+func TestNew_WithBorderPadding(t *testing.T) {
+	// Default has 1,1 padding. Setting to 0,0 should result in shorter view
+	mDefault := chatinput.New(chatinput.WithWidth(60))
+	mNoPadding := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderPadding(0, 0),
+	)
+
+	viewDefault := mDefault.View()
+	viewNoPadding := mNoPadding.View()
+
+	// View with no padding should have fewer lines
+	linesDefault := strings.Count(viewDefault, "\n")
+	linesNoPadding := strings.Count(viewNoPadding, "\n")
+
+	if linesNoPadding >= linesDefault {
+		t.Errorf("View with no padding (%d lines) should be shorter than default (%d lines)",
+			linesNoPadding, linesDefault)
+	}
+}
+
+func TestNew_WithBorderPadding_NegativeIgnored(t *testing.T) {
+	// Negative values should be ignored
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderPadding(-1, -1),
+	)
+
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string when negative padding was provided")
+	}
+}
+
+func TestNew_VisualOptions_Combined(t *testing.T) {
+	// Test all visual options together
+	m := chatinput.New(
+		chatinput.WithWidth(80),
+		chatinput.WithContentBackground(lipgloss.Color("#1a1a2e")),
+		chatinput.WithBorderStyle(lipgloss.RoundedBorder()),
+		chatinput.WithBorderColor(lipgloss.Color("#4a4a6a")),
+		chatinput.WithFlashBorderColor(lipgloss.Color("#e94560")),
+		chatinput.WithFlashDuration(300*time.Millisecond),
+		chatinput.WithBorderPadding(2, 2),
+	)
+
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with all visual options combined")
+	}
+
+	// Should use rounded border (not thick)
+	if strings.Contains(view, "┃") {
+		t.Error("View() should use rounded border, but contains thick border character")
 	}
 }

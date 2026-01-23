@@ -29,12 +29,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/severity1/claude-agent-tui/component/input/chatinput"
 	"github.com/severity1/claude-agent-tui/component/shared/keyhints"
+	"github.com/severity1/claude-agent-tui/style"
 )
 
 // model holds the application state.
@@ -48,19 +51,41 @@ type model struct {
 }
 
 // newModel creates a new model with default state.
+// This example demonstrates ALL configuration options available for ChatInput and KeyHints.
+// Many options use explicit defaults to showcase the API.
 func newModel() model {
+	// ChatInput with ALL configuration options shown explicitly
 	input := chatinput.New(
+		// Content behavior options
 		chatinput.WithPlaceholder("Type a message..."),
-		chatinput.WithMinHeight(1),
-		chatinput.WithMaxHeight(5),
-		chatinput.WithMode("Build"),
-		chatinput.WithInfoBar("Claude Sonnet 4.5"),
+		chatinput.WithMinHeight(1), // Default: 1 - single line minimum
+		chatinput.WithMaxHeight(5), // Default: 10 - lines before scrolling
 		chatinput.WithShowCounter(true),
+		chatinput.WithHistorySize(100), // Default: 100 entries
+
+		// Prompt configuration
+		chatinput.WithPrompt("> "),                   // Default: "" (empty) - add prompt prefix
+		chatinput.WithPromptStyle(style.InputPrompt), // Default style for prompt
+
+		// Info bar configuration
+		chatinput.WithMode("Build"),
+		chatinput.WithModeStyle(lipgloss.NewStyle().Foreground(style.Primary).Bold(true).Background(style.Surface)),
+		chatinput.WithInfoBar("Claude Sonnet 4.5"),
+		chatinput.WithInfoStyle(lipgloss.NewStyle().Foreground(style.TextMuted).Background(style.Surface)),
+
+		// Visual styling options (all showing explicit defaults)
+		chatinput.WithContentBackground(style.Surface),    // Background for content inside borders
+		chatinput.WithBorderStyle(lipgloss.ThickBorder()), // Border style (Thick, Rounded, Normal)
+		chatinput.WithBorderColor(style.Border),           // Normal border color
+		chatinput.WithFlashBorderColor(style.Primary),     // Border color during copy flash
+		chatinput.WithFlashDuration(150*time.Millisecond), // Copy flash animation duration
+		chatinput.WithBorderPadding(1, 1),                 // Internal padding (top, bottom)
 	)
 	// Focus the input so it accepts keyboard input immediately
 	input.Focus()
 
-	hints := keyhints.New([]keyhints.Binding{
+	// Define keybindings for help display
+	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
 		{Key: "Alt+Enter", Desc: "Newline"},
 		{Key: "Up/Down", Desc: "History"},
@@ -69,7 +94,23 @@ func newModel() model {
 		{Key: "Tab", Desc: "Focus hints"},
 		{Key: "?", Desc: "Help (focused)"},
 		{Key: "Ctrl+C", Desc: "Quit"},
-	}, keyhints.WithCollapsed(), keyhints.WithDefaultVisible(4))
+	}
+
+	// KeyHints with ALL configuration options shown explicitly
+	hints := keyhints.New(bindings,
+		// Display configuration
+		keyhints.WithDefaultVisible(4), // Default: 3 - hints shown when collapsed
+		keyhints.WithCollapsed(),       // Start collapsed (default: expanded)
+		keyhints.WithSeparator(" | "),  // Default separator between hints
+		keyhints.WithPadding(""),       // Default: "" - left padding for inline views
+
+		// Style configuration (all showing explicit defaults)
+		keyhints.WithKeyStyle(lipgloss.NewStyle().Bold(true).Foreground(style.TextMuted)),
+		keyhints.WithDescStyle(lipgloss.NewStyle().Foreground(style.TextMuted)),
+		keyhints.WithSepStyle(lipgloss.NewStyle().Faint(true).Foreground(style.TextMuted)),
+		keyhints.WithFocusStyle(lipgloss.NewStyle().Foreground(style.Primary)), // Used when component is focused
+		keyhints.WithHelpStyle(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(style.Border).Padding(1, 2)),
+	)
 
 	return model{
 		input:    input,

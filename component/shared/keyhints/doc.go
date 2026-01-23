@@ -33,7 +33,7 @@
 //   - Bindings(): Get current bindings
 //
 // Expansion control:
-//   - Toggle(): Toggle between expanded and collapsed inline view
+//   - ToggleExpanded(): Toggle between expanded and collapsed inline view
 //   - Expanded(): Check if inline view is expanded
 //   - SetExpanded(bool): Set expansion state directly
 //

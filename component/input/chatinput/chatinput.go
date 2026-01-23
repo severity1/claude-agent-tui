@@ -61,6 +61,15 @@ type Model struct {
 	infoStyle   lipgloss.Style // style for info bar
 	flashing    bool           // true during copy flash animation
 	placeholder string         // placeholder text (rendered by us, not bubbles textarea)
+
+	// Visual styling options
+	contentBg           lipgloss.Color  // background color for all content inside borders
+	borderStyle         lipgloss.Border // border style (Thick, Rounded, Normal, etc.)
+	borderColor         lipgloss.Color  // border color when not flashing
+	flashBorderColor    lipgloss.Color  // border color during copy flash
+	flashDuration       time.Duration   // duration of copy flash animation
+	borderPaddingTop    int             // top padding inside border
+	borderPaddingBottom int             // bottom padding inside border
 }
 
 // Option configures the Model.
@@ -102,6 +111,14 @@ func New(opts ...Option) Model {
 		maxHeight:   10, // reasonable scroll point
 		modeStyle:   lipgloss.NewStyle().Foreground(style.Primary).Bold(true).Background(style.Surface),
 		infoStyle:   lipgloss.NewStyle().Foreground(style.TextMuted).Background(style.Surface),
+		// Visual styling defaults
+		contentBg:           style.Surface,
+		borderStyle:         lipgloss.ThickBorder(),
+		borderColor:         style.Border,
+		flashBorderColor:    style.Primary,
+		flashDuration:       150 * time.Millisecond,
+		borderPaddingTop:    1,
+		borderPaddingBottom: 1,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -223,6 +240,61 @@ func WithInfoBar(text string) Option {
 func WithInfoStyle(s lipgloss.Style) Option {
 	return func(m *Model) {
 		m.infoStyle = s
+	}
+}
+
+// WithContentBackground sets the background color for all content inside the borders.
+// Default is style.Surface.
+func WithContentBackground(color lipgloss.Color) Option {
+	return func(m *Model) {
+		m.contentBg = color
+	}
+}
+
+// WithBorderStyle sets the border style (e.g., ThickBorder, RoundedBorder, NormalBorder).
+// Default is lipgloss.ThickBorder().
+func WithBorderStyle(border lipgloss.Border) Option {
+	return func(m *Model) {
+		m.borderStyle = border
+	}
+}
+
+// WithBorderColor sets the border color when not flashing.
+// Default is style.Border.
+func WithBorderColor(color lipgloss.Color) Option {
+	return func(m *Model) {
+		m.borderColor = color
+	}
+}
+
+// WithFlashBorderColor sets the border color during the copy flash animation.
+// Default is style.Primary.
+func WithFlashBorderColor(color lipgloss.Color) Option {
+	return func(m *Model) {
+		m.flashBorderColor = color
+	}
+}
+
+// WithFlashDuration sets the duration of the copy flash animation.
+// Default is 150ms.
+func WithFlashDuration(d time.Duration) Option {
+	return func(m *Model) {
+		if d > 0 {
+			m.flashDuration = d
+		}
+	}
+}
+
+// WithBorderPadding sets the top and bottom padding inside the border.
+// Default is (1, 1).
+func WithBorderPadding(top, bottom int) Option {
+	return func(m *Model) {
+		if top >= 0 {
+			m.borderPaddingTop = top
+		}
+		if bottom >= 0 {
+			m.borderPaddingBottom = bottom
+		}
 	}
 }
 
@@ -425,7 +497,7 @@ func (m *Model) CopyCmd() tea.Cmd {
 			osc52.New(text).WriteTo(os.Stderr)
 			return CopiedMsg{Text: text, Err: nil}
 		},
-		tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg {
+		tea.Tick(m.flashDuration, func(time.Time) tea.Msg {
 			return flashDoneMsg{}
 		}),
 	)
@@ -497,8 +569,8 @@ func (m Model) View() string {
 	textareaWidth := max(10, contentWidth-promptWidth)
 	m.textarea.SetWidth(textareaWidth)
 
-	// Style for Surface background fill
-	bgStyle := lipgloss.NewStyle().Background(style.Surface)
+	// Style for content background fill
+	bgStyle := lipgloss.NewStyle().Background(m.contentBg)
 
 	// Render textarea or custom placeholder
 	var textareaView string
@@ -507,21 +579,21 @@ func (m Model) View() string {
 		// The bug: first placeholder line doesn't pad to full width
 		placeholderStyle := lipgloss.NewStyle().
 			Foreground(style.TextMuted).
-			Background(style.Surface).
+			Background(m.contentBg).
 			Width(textareaWidth)
 		textareaView = placeholderStyle.Render(m.placeholder)
 	} else {
 		textareaView = m.textarea.View()
 	}
 
-	// Use Place() to ensure Surface background fills entire area
+	// Use Place() to ensure content background fills entire area
 	textareaView = lipgloss.Place(
 		textareaWidth,
 		displayHeight,
 		lipgloss.Left,
 		lipgloss.Top,
 		textareaView,
-		lipgloss.WithWhitespaceBackground(style.Surface),
+		lipgloss.WithWhitespaceBackground(m.contentBg),
 	)
 
 	// Full-width style for lines that need to fill contentWidth
@@ -535,7 +607,7 @@ func (m Model) View() string {
 		lipgloss.Left,
 		lipgloss.Top,
 		inputRow,
-		lipgloss.WithWhitespaceBackground(style.Surface),
+		lipgloss.WithWhitespaceBackground(m.contentBg),
 	)
 
 	var innerContent string
@@ -558,34 +630,34 @@ func (m Model) View() string {
 		totalHeight += 2 // spacing + info bar
 	}
 
-	// Use Place to fill background with Surface color
+	// Use Place to fill background with content background color
 	innerContent = lipgloss.Place(
 		contentWidth,
 		totalHeight,
 		lipgloss.Left,
 		lipgloss.Top,
 		innerContent,
-		lipgloss.WithWhitespaceBackground(style.Surface),
+		lipgloss.WithWhitespaceBackground(m.contentBg),
 	)
 
-	borderColor := style.Border
+	currentBorderColor := m.borderColor
 	if m.flashing {
-		borderColor = style.Primary
+		currentBorderColor = m.flashBorderColor
 	}
 
-	// Border with padding and Surface background for padding areas
+	// Border with padding and content background for padding areas
 	// Width ensures content fits exactly, making right border visible
-	borderStyle := lipgloss.NewStyle().
+	borderStyleRendered := lipgloss.NewStyle().
 		Width(contentWidth).
 		BorderLeft(true).
 		BorderRight(true).
-		BorderStyle(lipgloss.ThickBorder()).
-		BorderForeground(borderColor).
-		PaddingTop(1).
-		PaddingBottom(1).
-		Background(style.Surface)
+		BorderStyle(m.borderStyle).
+		BorderForeground(currentBorderColor).
+		PaddingTop(m.borderPaddingTop).
+		PaddingBottom(m.borderPaddingBottom).
+		Background(m.contentBg)
 
-	return borderStyle.Render(innerContent)
+	return borderStyleRendered.Render(innerContent)
 }
 
 // buildInfoBar constructs the info bar line with mode and info on left, counter on right.
@@ -593,12 +665,12 @@ func (m Model) View() string {
 // The contentWidth is the width inside the borders (total width minus border chars).
 // When a prompt is configured, the info bar aligns with the textarea (indented by prompt width).
 // When no prompt is configured, the info bar starts at the left edge.
-// All content uses Surface background for consistent appearance.
+// All content uses the configured content background for consistent appearance.
 func (m Model) buildInfoBar(prompt string, contentWidth int) string {
 	promptWidth := lipgloss.Width(prompt)
 
 	// Style for background-colored spaces
-	bgStyle := lipgloss.NewStyle().Background(style.Surface)
+	bgStyle := lipgloss.NewStyle().Background(m.contentBg)
 
 	// Left side: mode (if set) followed by info bar text
 	left := ""
