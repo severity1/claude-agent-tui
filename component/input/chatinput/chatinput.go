@@ -15,6 +15,12 @@ import (
 	"github.com/severity1/claude-agent-tui/style"
 )
 
+// reduceMotion checks if the user prefers reduced motion.
+// Respects the REDUCE_MOTION environment variable for accessibility.
+func reduceMotion() bool {
+	return os.Getenv("REDUCE_MOTION") != ""
+}
+
 // DefaultHistorySize is the default maximum number of history entries.
 const DefaultHistorySize = 100
 
@@ -27,11 +33,11 @@ type SubmitMsg struct {
 // Uses OSC 52 escape sequences which work cross-platform in modern terminals
 // including over SSH, tmux, and Wayland sessions.
 //
-// Note: OSC 52 is a "fire and forget" operation - the terminal handles the
-// actual clipboard write. Err is always nil for OSC 52 (kept for API compatibility).
+// Note: Err captures write failures to stderr, but a nil error does NOT guarantee
+// the clipboard was updated - OSC 52 is "fire and forget" and terminal support varies.
 type CopiedMsg struct {
 	Text string
-	Err  error // Always nil for OSC 52; kept for API compatibility
+	Err  error
 }
 
 // flashDoneMsg signals the end of the copy flash animation.
@@ -75,6 +81,16 @@ type Model struct {
 // Option configures the Model.
 type Option func(*Model)
 
+// configureTextareaStyle sets consistent styling for a textarea style struct.
+func configureTextareaStyle(s *textarea.Style, fg, muted, bg lipgloss.TerminalColor) {
+	s.Base = lipgloss.NewStyle().Foreground(fg).Background(bg)
+	s.CursorLine = lipgloss.NewStyle().Background(bg)
+	s.EndOfBuffer = lipgloss.NewStyle().Background(bg)
+	s.Placeholder = lipgloss.NewStyle().Foreground(muted).Background(bg)
+	s.Prompt = lipgloss.NewStyle().Background(bg)
+	s.Text = lipgloss.NewStyle().Foreground(fg).Background(bg)
+}
+
 // New creates a new ChatInput model with the given options.
 func New(opts ...Option) Model {
 	ta := textarea.New()
@@ -87,18 +103,8 @@ func New(opts ...Option) Model {
 	mutedColor := style.TextMuted
 	bgColor := style.Surface
 
-	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(textColor).Background(bgColor)
-	ta.BlurredStyle.CursorLine = lipgloss.NewStyle().Background(bgColor)
-	ta.BlurredStyle.EndOfBuffer = lipgloss.NewStyle().Background(bgColor)
-	ta.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(mutedColor).Background(bgColor)
-	ta.BlurredStyle.Prompt = lipgloss.NewStyle().Background(bgColor)
-	ta.BlurredStyle.Text = lipgloss.NewStyle().Foreground(textColor).Background(bgColor)
-	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(textColor).Background(bgColor)
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(bgColor)
-	ta.FocusedStyle.EndOfBuffer = lipgloss.NewStyle().Background(bgColor)
-	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(mutedColor).Background(bgColor)
-	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Background(bgColor)
-	ta.FocusedStyle.Text = lipgloss.NewStyle().Foreground(textColor).Background(bgColor)
+	configureTextareaStyle(&ta.BlurredStyle, textColor, mutedColor, bgColor)
+	configureTextareaStyle(&ta.FocusedStyle, textColor, mutedColor, bgColor)
 
 	m := Model{
 		textarea:    ta,
@@ -488,15 +494,26 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (bool, tea.Cmd) {
 // own copy function. Ctrl+Y is the traditional Unix "yank" key and works reliably.
 //
 // This also triggers a brief flash animation on the border to provide visual feedback.
+// The flash animation respects REDUCE_MOTION environment variable for accessibility.
 func (m *Model) CopyCmd() tea.Cmd {
 	text := m.textarea.Value()
 	m.flashing = true
+
+	copyCmd := func() tea.Msg {
+		// OSC 52 writes to terminal's clipboard via escape sequence.
+		// Note: Even with a nil error, clipboard success cannot be verified
+		// as OSC 52 is "fire and forget" - the terminal handles the actual copy.
+		_, err := osc52.New(text).WriteTo(os.Stderr)
+		return CopiedMsg{Text: text, Err: err}
+	}
+
+	// Respect REDUCE_MOTION preference for accessibility
+	if reduceMotion() {
+		return copyCmd
+	}
+
 	return tea.Batch(
-		func() tea.Msg {
-			// OSC 52 writes to terminal's clipboard via escape sequence
-			osc52.New(text).WriteTo(os.Stderr)
-			return CopiedMsg{Text: text, Err: nil}
-		},
+		copyCmd,
 		tea.Tick(m.flashDuration, func(time.Time) tea.Msg {
 			return flashDoneMsg{}
 		}),
@@ -555,9 +572,13 @@ func (m *Model) addToHistory(text string) {
 }
 
 // View implements tea.Model.
+// Note: This method intentionally mutates the receiver's textarea height
+// to implement auto-expansion. This is safe because Bubble Tea treats
+// models as values and the mutation enables dynamic height adjustment
+// based on content without requiring explicit SetHeight calls.
 func (m Model) View() string {
 	displayHeight := m.Height()
-	m.textarea.SetHeight(displayHeight)
+	m.textarea.SetHeight(displayHeight) // Intentional mutation for auto-expansion
 
 	prompt := m.promptStyle.Render(m.prompt)
 	promptWidth := lipgloss.Width(prompt)

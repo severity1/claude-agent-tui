@@ -45,9 +45,8 @@ type model struct {
 	input    chatinput.Model
 	hints    keyhints.Model
 	messages []string
-	copied   bool // show copy feedback
-	width    int  // terminal width
-	height   int  // terminal height
+	width    int // terminal width
+	height   int // terminal height
 }
 
 // newModel creates a new model with default state.
@@ -174,28 +173,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case chatinput.SubmitMsg:
 		// Add the submitted text to messages
 		m.messages = append(m.messages, msg.Text)
-		m.copied = false
 		return m, nil
 
 	case chatinput.CopiedMsg:
-		// Show copy feedback
-		if msg.Err == nil {
-			m.copied = true
-		}
+		// Flash animation provides visual feedback - no additional handling needed.
+		// Note: msg.Err captures write failures, but nil does NOT guarantee
+		// clipboard success - OSC 52 is "fire and forget".
 		return m, nil
 	}
 
 	// Pass messages to focused component
 	if m.hints.Focused() {
 		updated, cmd := m.hints.Update(msg)
-		m.hints = updated.(keyhints.Model)
+		if model, ok := updated.(keyhints.Model); ok {
+			m.hints = model
+		}
 		return m, cmd
 	}
 
 	// Pass other messages to chatinput
 	var cmd tea.Cmd
 	updated, cmd := m.input.Update(msg)
-	m.input = updated.(chatinput.Model)
+	if model, ok := updated.(chatinput.Model); ok {
+		m.input = model
+	}
 	return m, cmd
 }
 
@@ -219,13 +220,7 @@ func (m model) View() string {
 
 	// Display the input (now with built-in bordered styling)
 	sb.WriteString(m.input.View())
-	sb.WriteString("\n")
-
-	// Show copy feedback
-	if m.copied {
-		sb.WriteString("[Copied to clipboard]\n")
-	}
-	sb.WriteString("\n")
+	sb.WriteString("\n\n")
 
 	// Display keyhints or help window
 	// Padding is now built into the keyhints component (default 1 space)
