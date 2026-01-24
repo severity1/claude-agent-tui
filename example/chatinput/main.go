@@ -164,6 +164,7 @@ func (m model) switchTheme(name string) model {
 		keyhints.WithDefaultVisible(5),
 		keyhints.WithCollapsed(),
 		keyhints.WithSeparator(" | "),
+		keyhints.WithWidth(m.width),
 	)
 
 	return m
@@ -185,6 +186,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			inputWidth = 20
 		}
 		m.input.SetWidth(inputWidth)
+		m.hints.SetWidth(msg.Width)
 		return m, nil
 
 	case tea.KeyMsg:

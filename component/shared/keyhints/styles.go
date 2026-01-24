@@ -24,6 +24,8 @@ type Styles struct {
 	BorderColor lipgloss.TerminalColor
 	// PrimaryColor is the accent color used for focus indication.
 	PrimaryColor lipgloss.TerminalColor
+	// ContentBg is the background color for help content.
+	ContentBg lipgloss.TerminalColor
 }
 
 // DefaultStyles returns the default styles for KeyHints.
@@ -45,6 +47,7 @@ func DefaultStyles() Styles {
 
 		BorderColor:  border,
 		PrimaryColor: primary,
+		ContentBg:    nil, // transparent by default
 	}
 }
 
@@ -67,5 +70,6 @@ func StylesFromPalette(p *theme.Palette) Styles {
 
 		BorderColor:  p.Border,
 		PrimaryColor: p.Primary,
+		ContentBg:    p.BackgroundPanel,
 	}
 }

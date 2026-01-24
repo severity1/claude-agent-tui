@@ -29,6 +29,16 @@ const DefaultPadding = ""
 // used in View() width calculations.
 const borderWidth = 2
 
+// HelpMode defines how the help window expands when toggled.
+type HelpMode int
+
+const (
+	HelpModeDown   HelpMode = iota // Expands downward (default)
+	HelpModeUp                     // Expands upward
+	HelpModeCenter                 // Floating window at center
+	HelpModeTop                    // Expands from top
+)
+
 // Model represents the keyhints component state.
 type Model struct {
 	bindings       []Binding
@@ -48,6 +58,10 @@ type Model struct {
 	// Colors for dynamic styling
 	borderColor  lipgloss.TerminalColor // border color when not focused
 	primaryColor lipgloss.TerminalColor // accent color for focus indication
+	contentBg    lipgloss.TerminalColor // background color for help content
+
+	// Help window configuration
+	helpMode HelpMode // how the help window expands
 }
 
 // Option configures the Model.
@@ -71,6 +85,8 @@ func New(bindings []Binding, opts ...Option) Model {
 		defaultVisible: DefaultVisibleCount,
 		borderColor:    defaults.BorderColor,
 		primaryColor:   defaults.PrimaryColor,
+		contentBg:      defaults.ContentBg,
+		helpMode:       HelpModeDown, // default: expand downward
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -149,6 +165,20 @@ func WithHelpStyle(style lipgloss.Style) Option {
 	}
 }
 
+// WithHelpMode sets how the help window expands when toggled.
+func WithHelpMode(mode HelpMode) Option {
+	return func(m *Model) {
+		m.helpMode = mode
+	}
+}
+
+// WithContentBackground sets the background color for help content.
+func WithContentBackground(color lipgloss.TerminalColor) Option {
+	return func(m *Model) {
+		m.contentBg = color
+	}
+}
+
 // WithPadding sets the left padding for inline views (View and ViewCompact).
 // Use empty string "" to disable padding. Default is DefaultPadding (empty string).
 func WithPadding(padding string) Option {
@@ -172,6 +202,7 @@ func WithPalette(p *theme.Palette) Option {
 		m.helpStyle = s.HelpStyle
 		m.borderColor = s.BorderColor
 		m.primaryColor = s.PrimaryColor
+		m.contentBg = s.ContentBg
 	}
 }
 
@@ -186,6 +217,7 @@ func WithStyles(s Styles) Option {
 		m.helpStyle = s.HelpStyle
 		m.borderColor = s.BorderColor
 		m.primaryColor = s.PrimaryColor
+		m.contentBg = s.ContentBg
 	}
 }
 
@@ -220,6 +252,12 @@ func (m Model) Expanded() bool {
 // SetExpanded sets the expanded state directly.
 func (m *Model) SetExpanded(expanded bool) {
 	m.expanded = expanded
+}
+
+// SetWidth sets the width for the component.
+// This affects both the inline View() truncation and ViewHelp() width in attached modes.
+func (m *Model) SetWidth(width int) {
+	m.width = width
 }
 
 // Focus sets the focused state and returns nil (no cursor blink needed for this component).
@@ -257,6 +295,21 @@ func (m *Model) ToggleHelp() {
 // ShowingHelp returns whether the help window is visible.
 func (m Model) ShowingHelp() bool {
 	return m.showHelp
+}
+
+// HelpMode returns how the help window expands.
+func (m Model) HelpMode() HelpMode {
+	return m.helpMode
+}
+
+// HelpHeight returns the line count of the help window for parent layout calculations.
+// Returns 0 if there are no bindings.
+func (m Model) HelpHeight() int {
+	if len(m.bindings) == 0 {
+		return 1 // "No keybindings defined" message
+	}
+	// Title + blank line + bindings + blank line + close hint
+	return 1 + 1 + len(m.bindings) + 1 + 1
 }
 
 // Init implements tea.Model.
@@ -368,6 +421,11 @@ func (m Model) View() string {
 		BorderForeground(currentBorderColor).
 		PaddingLeft(1)
 
+	// Apply width for consistent full-width rendering (like ChatInput)
+	if m.width > 0 {
+		borderStyle = borderStyle.Width(m.width - borderWidth)
+	}
+
 	return borderStyle.Render(result)
 }
 
@@ -387,10 +445,12 @@ func (m Model) ViewCompact() string {
 	return m.padding + strings.Join(parts, sep)
 }
 
-// ViewHelp renders a boxed help window showing all keybindings.
+// ViewHelp renders the help window showing all keybindings.
+// Uses left border style to match View() and applies background color if set.
+// In Down/Up/Top modes, width matches the keyhints bar; Center uses content-width.
 func (m Model) ViewHelp() string {
 	if len(m.bindings) == 0 {
-		return m.helpStyle.Render("No keybindings defined")
+		return m.renderHelpContent("No keybindings defined", m.width)
 	}
 
 	var sb strings.Builder
@@ -415,13 +475,36 @@ func (m Model) ViewHelp() string {
 		}
 		key := m.keyStyle.Render(b.Key + padding)
 		desc := m.descStyle.Render(b.Desc)
-		fmt.Fprintf(&sb, "  %s  %s\n", key, desc)
+		fmt.Fprintf(&sb, "%s  %s\n", key, desc)
 	}
 
 	sb.WriteString("\n")
 	sb.WriteString(m.sepStyle.Render("Press ? or Esc to close"))
 
-	// Note: ViewHelp does NOT apply padding - the box has its own styling
-	// and prepending padding would break the border alignment
-	return m.helpStyle.Render(sb.String())
+	return m.renderHelpContent(sb.String(), m.width)
+}
+
+// renderHelpContent wraps content with left border styling for the help window.
+// Width is applied for non-Center modes to match the keyhints bar width.
+func (m Model) renderHelpContent(content string, width int) string {
+	// Use focusStyle color for border (help window is always "active" when shown)
+	borderColor := m.focusStyle.GetForeground()
+
+	style := lipgloss.NewStyle().
+		BorderLeft(true).
+		BorderStyle(lipgloss.ThickBorder()).
+		BorderForeground(borderColor).
+		PaddingLeft(1)
+
+	// Apply background color if set
+	if m.contentBg != nil {
+		style = style.Background(m.contentBg)
+	}
+
+	// Apply width for non-Center modes to match keyhints bar width
+	if m.helpMode != HelpModeCenter && width > 0 {
+		style = style.Width(width - borderWidth)
+	}
+
+	return style.Render(content)
 }

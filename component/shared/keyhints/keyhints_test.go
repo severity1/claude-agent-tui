@@ -359,6 +359,32 @@ func TestModel_SetExpanded(t *testing.T) {
 	}
 }
 
+func TestModel_SetWidth(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeDown))
+
+	// Initially no width set
+	view1 := m.ViewHelp()
+
+	// Set width
+	m.SetWidth(50)
+	view2 := m.ViewHelp()
+
+	// After setting width, help window should be constrained
+	lines := strings.Split(view2, "\n")
+	for _, line := range lines {
+		if lipgloss.Width(line) > 50 {
+			t.Errorf("ViewHelp() after SetWidth(50) should respect width, got line width %d",
+				lipgloss.Width(line))
+		}
+	}
+
+	// Verify width was actually applied (view should be different or same width)
+	_ = view1 // Used for comparison logic if needed
+}
+
 func TestModel_View_Collapsed_ShowsLimitedBindings(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
@@ -858,21 +884,20 @@ func TestModel_ViewCompact_AppliesPadding(t *testing.T) {
 }
 
 func TestModel_ViewHelp_NoPadding(t *testing.T) {
-	// ViewHelp should NOT apply padding - the box has its own styling
-	// and prepending padding would break the border alignment
+	// ViewHelp should NOT apply padding - it has its own left border styling
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
 	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
 
 	view := m.ViewHelp()
-	// Should NOT start with padding - should start with box border
+	// Should NOT start with padding - should start with left border
 	if strings.HasPrefix(view, ">>") {
 		t.Errorf("ViewHelp() should NOT apply padding prefix, got: %q", view[:50])
 	}
-	// Should start with box border character
-	if !strings.HasPrefix(view, "╭") {
-		t.Errorf("ViewHelp() should start with box border, got: %q", view[:20])
+	// Should start with thick left border character (matching View() style)
+	if !strings.HasPrefix(view, "┃") && !strings.HasPrefix(view, "\u2503") {
+		t.Errorf("ViewHelp() should start with thick left border, got: %q", view[:20])
 	}
 }
 
@@ -937,5 +962,385 @@ func TestNew_WithWidth_ZeroValue(t *testing.T) {
 	// Should NOT show "more" indicator when width constraint is disabled
 	if strings.Contains(view, "more") {
 		t.Errorf("View() with width 0 should NOT contain 'more' indicator, got: %q", view)
+	}
+}
+
+// ============================================================================
+// HelpMode Tests
+// ============================================================================
+
+func TestNew_DefaultHelpMode(t *testing.T) {
+	m := keyhints.New(nil)
+
+	if m.HelpMode() != keyhints.HelpModeDown {
+		t.Errorf("Default HelpMode() = %v, want HelpModeDown (0)", m.HelpMode())
+	}
+}
+
+func TestNew_WithHelpMode(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     keyhints.HelpMode
+		expected keyhints.HelpMode
+	}{
+		{"HelpModeDown", keyhints.HelpModeDown, keyhints.HelpModeDown},
+		{"HelpModeUp", keyhints.HelpModeUp, keyhints.HelpModeUp},
+		{"HelpModeCenter", keyhints.HelpModeCenter, keyhints.HelpModeCenter},
+		{"HelpModeTop", keyhints.HelpModeTop, keyhints.HelpModeTop},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := keyhints.New(nil, keyhints.WithHelpMode(tt.mode))
+			if m.HelpMode() != tt.expected {
+				t.Errorf("HelpMode() = %v, want %v", m.HelpMode(), tt.expected)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// HelpHeight Tests
+// ============================================================================
+
+func TestModel_HelpHeight_EmptyBindings(t *testing.T) {
+	m := keyhints.New(nil)
+
+	height := m.HelpHeight()
+	// Empty bindings shows "No keybindings defined" which is 1 line
+	if height != 1 {
+		t.Errorf("HelpHeight() with empty bindings = %d, want 1", height)
+	}
+}
+
+func TestModel_HelpHeight_WithBindings(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+		{Key: "c", Desc: "C"},
+	}
+	m := keyhints.New(bindings)
+
+	height := m.HelpHeight()
+	// Title (1) + blank (1) + bindings (3) + blank (1) + close hint (1) = 7
+	expected := 7
+	if height != expected {
+		t.Errorf("HelpHeight() with 3 bindings = %d, want %d", height, expected)
+	}
+}
+
+// ============================================================================
+// ViewHelp Left Border Tests
+// ============================================================================
+
+func TestModel_ViewHelp_HasLeftBorder(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	view := m.ViewHelp()
+	// Should contain thick left border character
+	if !strings.Contains(view, "┃") && !strings.Contains(view, "\u2503") {
+		t.Errorf("ViewHelp() should contain thick left border, got: %q", view)
+	}
+}
+
+func TestModel_ViewHelp_NoFullBorder(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	view := m.ViewHelp()
+	// Should NOT contain rounded border characters
+	roundedBorderChars := []string{"╭", "╮", "╰", "╯"}
+	for _, char := range roundedBorderChars {
+		if strings.Contains(view, char) {
+			t.Errorf("ViewHelp() should NOT contain rounded border char %q, got: %q", char, view)
+		}
+	}
+}
+
+// ============================================================================
+// ContentBackground Tests
+// ============================================================================
+
+func TestNew_WithContentBackground(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	bgColor := lipgloss.Color("236")
+	m := keyhints.New(bindings, keyhints.WithContentBackground(bgColor))
+
+	// Just verify it renders without error
+	view := m.ViewHelp()
+	if !strings.Contains(view, "a") {
+		t.Errorf("ViewHelp() with content background should contain binding key")
+	}
+}
+
+// ============================================================================
+// ViewHelp Width Behavior Per Mode Tests
+// ============================================================================
+
+func TestModel_ViewHelp_DownMode_MatchesBarWidth(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+		{Key: "b", Desc: "Action B"},
+	}
+	width := 60
+	m := keyhints.New(bindings,
+		keyhints.WithWidth(width),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
+
+	view := m.ViewHelp()
+	// Help window should have consistent width matching the bar
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth > width {
+			t.Errorf("ViewHelp() line exceeds width %d: got %d for line %q",
+				width, lineWidth, line)
+		}
+	}
+}
+
+func TestModel_ViewHelp_UpMode_MatchesBarWidth(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+	}
+	width := 50
+	m := keyhints.New(bindings,
+		keyhints.WithWidth(width),
+		keyhints.WithHelpMode(keyhints.HelpModeUp),
+	)
+
+	view := m.ViewHelp()
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth > width {
+			t.Errorf("ViewHelp() in Up mode line exceeds width %d: got %d",
+				width, lineWidth)
+		}
+	}
+}
+
+func TestModel_ViewHelp_TopMode_MatchesBarWidth(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+	}
+	width := 50
+	m := keyhints.New(bindings,
+		keyhints.WithWidth(width),
+		keyhints.WithHelpMode(keyhints.HelpModeTop),
+	)
+
+	view := m.ViewHelp()
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth > width {
+			t.Errorf("ViewHelp() in Top mode line exceeds width %d: got %d",
+				width, lineWidth)
+		}
+	}
+}
+
+func TestModel_ViewHelp_CenterMode_UsesContentWidth(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+	}
+	// Set a narrow width that would truncate content if applied
+	m := keyhints.New(bindings,
+		keyhints.WithWidth(20),
+		keyhints.WithHelpMode(keyhints.HelpModeCenter),
+	)
+
+	view := m.ViewHelp()
+	// Center mode should NOT constrain width - content should be fully visible
+	if !strings.Contains(view, "Action A") {
+		t.Errorf("ViewHelp() in Center mode should use content width, but description was truncated")
+	}
+	if !strings.Contains(view, "Keyboard Shortcuts") {
+		t.Errorf("ViewHelp() in Center mode should contain full title")
+	}
+}
+
+func TestModel_ViewHelp_ZeroWidth_NoConstraint(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit the form"},
+	}
+	// Width 0 should not apply any constraint
+	m := keyhints.New(bindings,
+		keyhints.WithWidth(0),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
+
+	view := m.ViewHelp()
+	// Content should be fully visible
+	if !strings.Contains(view, "Submit the form") {
+		t.Errorf("ViewHelp() with width 0 should not constrain content")
+	}
+}
+
+func TestModel_ViewHelp_EmptyBindings_WithWidth(t *testing.T) {
+	m := keyhints.New(nil,
+		keyhints.WithWidth(40),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
+
+	view := m.ViewHelp()
+	if !strings.Contains(view, "No keybindings") {
+		t.Errorf("ViewHelp() with empty bindings should show message, got %q", view)
+	}
+	// Should also respect width for empty message
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		if lipgloss.Width(line) > 40 {
+			t.Errorf("ViewHelp() empty message exceeds width 40")
+		}
+	}
+}
+
+func TestModel_ViewHelp_AllAttachedModes_ApplyWidth(t *testing.T) {
+	// Attached modes: Down, Up, Top - all should apply width constraint
+	attachedModes := []keyhints.HelpMode{
+		keyhints.HelpModeDown,
+		keyhints.HelpModeUp,
+		keyhints.HelpModeTop,
+	}
+
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+	}
+	width := 50
+
+	for _, mode := range attachedModes {
+		t.Run(modeToString(mode), func(t *testing.T) {
+			m := keyhints.New(bindings,
+				keyhints.WithWidth(width),
+				keyhints.WithHelpMode(mode),
+			)
+
+			view := m.ViewHelp()
+			lines := strings.Split(view, "\n")
+			for i, line := range lines {
+				lineWidth := lipgloss.Width(line)
+				if lineWidth > width {
+					t.Errorf("Line %d exceeds width %d: got %d for %q",
+						i, width, lineWidth, line)
+				}
+			}
+		})
+	}
+}
+
+// Helper function to convert HelpMode to string for test naming
+func modeToString(mode keyhints.HelpMode) string {
+	switch mode {
+	case keyhints.HelpModeDown:
+		return "Down"
+	case keyhints.HelpModeUp:
+		return "Up"
+	case keyhints.HelpModeCenter:
+		return "Center"
+	case keyhints.HelpModeTop:
+		return "Top"
+	default:
+		return "Unknown"
+	}
+}
+
+// ============================================================================
+// View Width Style Tests
+// ============================================================================
+
+func TestModel_View_WithWidth_AppliesWidthStyle(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+	}
+	width := 80
+	m := keyhints.New(bindings, keyhints.WithWidth(width))
+
+	view := m.View()
+	viewWidth := lipgloss.Width(view)
+
+	// View should fill near the specified width (accounting for border)
+	// borderWidth = 2 (border + padding), but lipgloss Width() excludes border
+	// so total = content + 1 (border) = width - 2 + 1 = width - 1
+	expectedWidth := width - 1
+	if viewWidth != expectedWidth {
+		t.Errorf("View() width = %d, want %d", viewWidth, expectedWidth)
+	}
+}
+
+func TestModel_View_WithWidth_ZeroDoesNotApplyStyle(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	// Width 0 should not apply width style
+	m := keyhints.New(bindings, keyhints.WithWidth(0))
+
+	view := m.View()
+	// Just verify it renders without crashing
+	if !strings.Contains(view, "a") {
+		t.Error("View() with width 0 should contain binding")
+	}
+}
+
+func TestModel_View_ViewHelp_ConsistentWidth(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+		{Key: "b", Desc: "Action B"},
+	}
+	width := 60
+	m := keyhints.New(bindings,
+		keyhints.WithWidth(width),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
+
+	barView := m.View()
+	barWidth := lipgloss.Width(barView)
+
+	m.Focus()
+	m.ShowHelp()
+	helpView := m.ViewHelp()
+	helpLines := strings.Split(helpView, "\n")
+
+	// All help lines should not exceed bar width
+	for i, line := range helpLines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth > barWidth {
+			t.Errorf("ViewHelp() line %d width (%d) exceeds View() width (%d)",
+				i, lineWidth, barWidth)
+		}
+	}
+}
+
+func TestModel_View_SetWidth_UpdatesRendering(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithWidth(50))
+
+	view1 := m.View()
+	width1 := lipgloss.Width(view1)
+
+	m.SetWidth(80)
+	view2 := m.View()
+	width2 := lipgloss.Width(view2)
+
+	if width1 == width2 {
+		t.Errorf("SetWidth() should change rendered width: before=%d, after=%d", width1, width2)
+	}
+	// Width should be 80 - 1 = 79 (accounting for border)
+	expectedWidth := 79
+	if width2 != expectedWidth {
+		t.Errorf("View() after SetWidth(80) = %d, want %d", width2, expectedWidth)
 	}
 }
