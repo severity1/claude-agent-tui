@@ -1452,3 +1452,63 @@ func TestNew_VisualOptions_Combined(t *testing.T) {
 		t.Error("View() should use rounded border, but contains thick border character")
 	}
 }
+
+// ============================================================================
+// Boundary Value Tests
+// ============================================================================
+
+func TestModel_SetWidth_ZeroValue(t *testing.T) {
+	m := chatinput.New()
+	m.SetWidth(0)
+
+	// SetWidth(0) should be accepted and stored
+	if m.Width() != 0 {
+		t.Errorf("Width() = %d after SetWidth(0), want 0", m.Width())
+	}
+
+	// View should still render (using minContentWidth internally)
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string after SetWidth(0)")
+	}
+}
+
+func TestModel_SetWidth_NegativeValue(t *testing.T) {
+	m := chatinput.New()
+	m.SetWidth(-1)
+
+	// SetWidth(-1) should be accepted and stored
+	if m.Width() != -1 {
+		t.Errorf("Width() = %d after SetWidth(-1), want -1", m.Width())
+	}
+
+	// View should still render (using minContentWidth internally)
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string after SetWidth(-1)")
+	}
+}
+
+func TestModel_CopyCmd_WhenUnfocused(t *testing.T) {
+	m := chatinput.New()
+	// Intentionally NOT calling Focus()
+	m.SetValue("text to copy unfocused")
+
+	// CopyCmd should work even when unfocused
+	cmd := m.CopyCmd()
+	if cmd == nil {
+		t.Fatal("CopyCmd() returned nil when unfocused, want non-nil command")
+	}
+
+	// Extract and verify CopiedMsg from batch
+	copiedMsg := extractCopiedMsg(t, cmd)
+
+	if copiedMsg.Text != "text to copy unfocused" {
+		t.Errorf("CopiedMsg.Text = %q, want %q", copiedMsg.Text, "text to copy unfocused")
+	}
+
+	// Flash state should be set even when unfocused
+	if !m.Flashing() {
+		t.Error("Flashing() = false after CopyCmd when unfocused, want true")
+	}
+}

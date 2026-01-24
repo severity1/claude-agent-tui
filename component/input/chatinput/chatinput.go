@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/severity1/claude-agent-tui/style"
+	"github.com/severity1/claude-agent-tui/theme"
 )
 
 // reduceMotion checks if the user prefers reduced motion.
@@ -23,6 +23,12 @@ func reduceMotion() bool {
 
 // DefaultHistorySize is the default maximum number of history entries.
 const DefaultHistorySize = 100
+
+// Width constants for View() layout calculations.
+const (
+	minContentWidth  = 20 // Minimum width for content area to remain usable
+	minTextareaWidth = 10 // Minimum width for textarea input field
+)
 
 // SubmitMsg is emitted when the user submits the input (presses Enter).
 type SubmitMsg struct {
@@ -69,13 +75,14 @@ type Model struct {
 	placeholder string         // placeholder text (rendered by us, not bubbles textarea)
 
 	// Visual styling options
-	contentBg           lipgloss.Color  // background color for all content inside borders
-	borderStyle         lipgloss.Border // border style (Thick, Rounded, Normal, etc.)
-	borderColor         lipgloss.Color  // border color when not flashing
-	flashBorderColor    lipgloss.Color  // border color during copy flash
-	flashDuration       time.Duration   // duration of copy flash animation
-	borderPaddingTop    int             // top padding inside border
-	borderPaddingBottom int             // bottom padding inside border
+	contentBg           lipgloss.TerminalColor // background color for all content inside borders
+	borderStyle         lipgloss.Border        // border style (Thick, Rounded, Normal, etc.)
+	borderColor         lipgloss.TerminalColor // border color when not flashing
+	flashBorderColor    lipgloss.TerminalColor // border color during copy flash
+	flashDuration       time.Duration          // duration of copy flash animation
+	borderPaddingTop    int                    // top padding inside border
+	borderPaddingBottom int                    // bottom padding inside border
+	textMutedColor      lipgloss.TerminalColor // muted text color for placeholder
 }
 
 // Option configures the Model.
@@ -97,14 +104,13 @@ func New(opts ...Option) Model {
 	ta.ShowLineNumbers = false
 	ta.Prompt = "" // Hide built-in prompt, we render our own externally
 
-	// Style textarea with Surface background to match Place() container.
-	// All inner content uses consistent Surface background for seamless appearance.
-	textColor := style.Text
-	mutedColor := style.TextMuted
-	bgColor := style.Surface
+	// Use default styles - can be overridden with WithPalette or WithStyles
+	defaults := DefaultStyles()
 
-	configureTextareaStyle(&ta.BlurredStyle, textColor, mutedColor, bgColor)
-	configureTextareaStyle(&ta.FocusedStyle, textColor, mutedColor, bgColor)
+	// Style textarea with background to match Place() container.
+	// All inner content uses consistent background for seamless appearance.
+	configureTextareaStyle(&ta.BlurredStyle, defaults.TextColor, defaults.TextMutedColor, defaults.ContentBg)
+	configureTextareaStyle(&ta.FocusedStyle, defaults.TextColor, defaults.TextMutedColor, defaults.ContentBg)
 
 	m := Model{
 		textarea:    ta,
@@ -112,19 +118,21 @@ func New(opts ...Option) Model {
 		historyIdx:  -1,
 		historySize: DefaultHistorySize,
 		prompt:      DefaultPrompt,
-		promptStyle: style.InputPrompt,
+		promptStyle: defaults.PromptStyle,
 		minHeight:   1,  // single line by default
 		maxHeight:   10, // reasonable scroll point
-		modeStyle:   lipgloss.NewStyle().Foreground(style.Primary).Bold(true).Background(style.Surface),
-		infoStyle:   lipgloss.NewStyle().Foreground(style.TextMuted).Background(style.Surface),
+		modeStyle:   defaults.ModeStyle,
+		infoStyle:   defaults.InfoStyle,
 		// Visual styling defaults
-		contentBg:           style.Surface,
-		borderStyle:         lipgloss.ThickBorder(),
-		borderColor:         style.Border,
-		flashBorderColor:    style.Primary,
-		flashDuration:       150 * time.Millisecond,
-		borderPaddingTop:    1,
-		borderPaddingBottom: 1,
+		contentBg:           defaults.ContentBg,
+		borderStyle:         defaults.Border,
+		borderColor:         defaults.BorderColor,
+		flashBorderColor:    defaults.FlashBorderColor,
+		flashDuration:       defaults.FlashDuration,
+		borderPaddingTop:    defaults.BorderPaddingTop,
+		borderPaddingBottom: defaults.BorderPaddingBottom,
+		// Store colors for placeholder rendering
+		textMutedColor: defaults.TextMutedColor,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -250,8 +258,8 @@ func WithInfoStyle(s lipgloss.Style) Option {
 }
 
 // WithContentBackground sets the background color for all content inside the borders.
-// Default is style.Surface.
-func WithContentBackground(color lipgloss.Color) Option {
+// Default is style.Surface. Accepts lipgloss.Color or lipgloss.AdaptiveColor.
+func WithContentBackground(color lipgloss.TerminalColor) Option {
 	return func(m *Model) {
 		m.contentBg = color
 	}
@@ -266,16 +274,16 @@ func WithBorderStyle(border lipgloss.Border) Option {
 }
 
 // WithBorderColor sets the border color when not flashing.
-// Default is style.Border.
-func WithBorderColor(color lipgloss.Color) Option {
+// Default is style.Border. Accepts lipgloss.Color or lipgloss.AdaptiveColor.
+func WithBorderColor(color lipgloss.TerminalColor) Option {
 	return func(m *Model) {
 		m.borderColor = color
 	}
 }
 
 // WithFlashBorderColor sets the border color during the copy flash animation.
-// Default is style.Primary.
-func WithFlashBorderColor(color lipgloss.Color) Option {
+// Default is style.Primary. Accepts lipgloss.Color or lipgloss.AdaptiveColor.
+func WithFlashBorderColor(color lipgloss.TerminalColor) Option {
 	return func(m *Model) {
 		m.flashBorderColor = color
 	}
@@ -301,6 +309,52 @@ func WithBorderPadding(top, bottom int) Option {
 		if bottom >= 0 {
 			m.borderPaddingBottom = bottom
 		}
+	}
+}
+
+// WithPalette applies a theme palette to the component.
+// This sets all styling from the palette, which can be overridden by subsequent options.
+func WithPalette(p *theme.Palette) Option {
+	return func(m *Model) {
+		if p == nil {
+			return
+		}
+		s := StylesFromPalette(p)
+		m.promptStyle = s.PromptStyle
+		m.modeStyle = s.ModeStyle
+		m.infoStyle = s.InfoStyle
+		m.borderStyle = s.Border
+		m.borderColor = s.BorderColor
+		m.flashBorderColor = s.FlashBorderColor
+		m.flashDuration = s.FlashDuration
+		m.contentBg = s.ContentBg
+		m.textMutedColor = s.TextMutedColor
+		m.borderPaddingTop = s.BorderPaddingTop
+		m.borderPaddingBottom = s.BorderPaddingBottom
+		// Update textarea styles
+		configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+		configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+	}
+}
+
+// WithStyles applies a custom Styles struct to the component.
+// Use StylesFromPalette() to create a Styles from a theme, then customize individual fields.
+func WithStyles(s Styles) Option {
+	return func(m *Model) {
+		m.promptStyle = s.PromptStyle
+		m.modeStyle = s.ModeStyle
+		m.infoStyle = s.InfoStyle
+		m.borderStyle = s.Border
+		m.borderColor = s.BorderColor
+		m.flashBorderColor = s.FlashBorderColor
+		m.flashDuration = s.FlashDuration
+		m.contentBg = s.ContentBg
+		m.textMutedColor = s.TextMutedColor
+		m.borderPaddingTop = s.BorderPaddingTop
+		m.borderPaddingBottom = s.BorderPaddingBottom
+		// Update textarea styles
+		configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+		configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
 	}
 }
 
@@ -489,6 +543,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (bool, tea.Cmd) {
 // using OSC 52 escape sequences. This works cross-platform in modern terminals
 // including over SSH, tmux, and Wayland sessions.
 //
+// CopyCmd works regardless of focus state - it can be called on an unfocused Model
+// to programmatically copy the textarea content. The keyboard shortcuts (Ctrl+Y,
+// Ctrl+Shift+C) only work when focused, but direct CopyCmd() calls always work.
+//
 // Can be triggered programmatically or via Ctrl+Y (recommended) or Ctrl+Shift+C.
 // Note: Ctrl+Shift+C may not work in all terminals as some intercept it for their
 // own copy function. Ctrl+Y is the traditional Unix "yank" key and works reliably.
@@ -584,10 +642,10 @@ func (m Model) View() string {
 	promptWidth := lipgloss.Width(prompt)
 
 	// Calculate content dimensions (inside borders)
-	contentWidth := max(20, m.width-2)
+	contentWidth := max(minContentWidth, m.width-2)
 
 	// Set textarea width to fit within content area (minus prompt)
-	textareaWidth := max(10, contentWidth-promptWidth)
+	textareaWidth := max(minTextareaWidth, contentWidth-promptWidth)
 	m.textarea.SetWidth(textareaWidth)
 
 	// Style for content background fill
@@ -599,7 +657,7 @@ func (m Model) View() string {
 		// Custom placeholder rendering (workaround for bubbles textarea bug)
 		// The bug: first placeholder line doesn't pad to full width
 		placeholderStyle := lipgloss.NewStyle().
-			Foreground(style.TextMuted).
+			Foreground(m.textMutedColor).
 			Background(m.contentBg).
 			Width(textareaWidth)
 		textareaView = placeholderStyle.Render(m.placeholder)

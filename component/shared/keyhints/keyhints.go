@@ -8,7 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/severity1/claude-agent-tui/style"
+
+	"github.com/severity1/claude-agent-tui/theme"
 )
 
 // Binding represents a single keybinding with its description.
@@ -23,6 +24,10 @@ const DefaultVisibleCount = 3
 // DefaultPadding is the default left padding for inline hints view.
 // Empty by default since the left border provides visual separation.
 const DefaultPadding = ""
+
+// borderWidth accounts for the left border character and internal padding
+// used in View() width calculations.
+const borderWidth = 2
 
 // Model represents the keyhints component state.
 type Model struct {
@@ -39,6 +44,10 @@ type Model struct {
 	defaultVisible int  // number of bindings to show when collapsed
 	focused        bool // whether the component has focus
 	showHelp       bool // whether to show the help window
+
+	// Colors for dynamic styling
+	borderColor  lipgloss.TerminalColor // border color when not focused
+	primaryColor lipgloss.TerminalColor // accent color for focus indication
 }
 
 // Option configures the Model.
@@ -46,17 +55,22 @@ type Option func(*Model)
 
 // New creates a new keyhints model with the given bindings and options.
 func New(bindings []Binding, opts ...Option) Model {
+	// Use default styles
+	defaults := DefaultStyles()
+
 	m := Model{
 		bindings:       bindings,
 		separator:      " | ",
-		keyStyle:       lipgloss.NewStyle().Bold(true).Foreground(style.TextMuted),
-		descStyle:      lipgloss.NewStyle().Foreground(style.TextMuted),
-		sepStyle:       lipgloss.NewStyle().Faint(true).Foreground(style.TextMuted),
-		focusStyle:     lipgloss.NewStyle().Foreground(style.Primary),
-		helpStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(style.Border).Padding(1, 2),
+		keyStyle:       defaults.KeyStyle,
+		descStyle:      defaults.DescStyle,
+		sepStyle:       defaults.SepStyle,
+		focusStyle:     defaults.FocusStyle,
+		helpStyle:      defaults.HelpStyle,
 		padding:        DefaultPadding,
 		expanded:       true, // show all by default for backwards compatibility
 		defaultVisible: DefaultVisibleCount,
+		borderColor:    defaults.BorderColor,
+		primaryColor:   defaults.PrimaryColor,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -136,10 +150,42 @@ func WithHelpStyle(style lipgloss.Style) Option {
 }
 
 // WithPadding sets the left padding for inline views (View and ViewCompact).
-// Use empty string "" to disable padding. Default is DefaultPadding (1 space).
+// Use empty string "" to disable padding. Default is DefaultPadding (empty string).
 func WithPadding(padding string) Option {
 	return func(m *Model) {
 		m.padding = padding
+	}
+}
+
+// WithPalette applies a theme palette to the component.
+// This sets all styling from the palette, which can be overridden by subsequent options.
+func WithPalette(p *theme.Palette) Option {
+	return func(m *Model) {
+		if p == nil {
+			return
+		}
+		s := StylesFromPalette(p)
+		m.keyStyle = s.KeyStyle
+		m.descStyle = s.DescStyle
+		m.sepStyle = s.SepStyle
+		m.focusStyle = s.FocusStyle
+		m.helpStyle = s.HelpStyle
+		m.borderColor = s.BorderColor
+		m.primaryColor = s.PrimaryColor
+	}
+}
+
+// WithStyles applies a custom Styles struct to the component.
+// Use StylesFromPalette() to create a Styles from a theme, then customize individual fields.
+func WithStyles(s Styles) Option {
+	return func(m *Model) {
+		m.keyStyle = s.KeyStyle
+		m.descStyle = s.DescStyle
+		m.sepStyle = s.SepStyle
+		m.focusStyle = s.FocusStyle
+		m.helpStyle = s.HelpStyle
+		m.borderColor = s.BorderColor
+		m.primaryColor = s.PrimaryColor
 	}
 }
 
@@ -264,7 +310,6 @@ func (m Model) View() string {
 	currentWidth := 0
 
 	// Account for border width (1 character + border padding)
-	borderWidth := 2 // left border character + internal padding
 	currentWidth = borderWidth
 
 	for i, b := range bindings {
@@ -312,15 +357,15 @@ func (m Model) View() string {
 	// Apply left padding
 	result = m.padding + result
 
-	// Wrap with left border - use focusStyle color when focused, Border color when unfocused
-	var borderColor lipgloss.TerminalColor = style.Border
+	// Wrap with left border - use focusStyle color when focused, borderColor when unfocused
+	currentBorderColor := m.borderColor
 	if m.focused {
-		borderColor = m.focusStyle.GetForeground()
+		currentBorderColor = m.focusStyle.GetForeground()
 	}
 	borderStyle := lipgloss.NewStyle().
 		BorderLeft(true).
 		BorderStyle(lipgloss.ThickBorder()).
-		BorderForeground(borderColor).
+		BorderForeground(currentBorderColor).
 		PaddingLeft(1)
 
 	return borderStyle.Render(result)

@@ -913,3 +913,29 @@ func TestModel_View_EmptyWithPadding(t *testing.T) {
 		t.Errorf("View() with empty bindings should return empty string, got: %q", view)
 	}
 }
+
+// ============================================================================
+// Boundary Value Tests
+// ============================================================================
+
+func TestNew_WithWidth_ZeroValue(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "Enter", Desc: "Submit"},
+		{Key: "Esc", Desc: "Clear"},
+	}
+	// WithWidth(0) should effectively disable width constraint
+	m := keyhints.New(bindings, keyhints.WithWidth(0))
+
+	view := m.View()
+	// Should render all bindings without truncation when width is 0
+	if !strings.Contains(view, "Enter") {
+		t.Error("View() with width 0 should contain 'Enter'")
+	}
+	if !strings.Contains(view, "Esc") {
+		t.Error("View() with width 0 should contain 'Esc'")
+	}
+	// Should NOT show "more" indicator when width constraint is disabled
+	if strings.Contains(view, "more") {
+		t.Errorf("View() with width 0 should NOT contain 'more' indicator, got: %q", view)
+	}
+}
