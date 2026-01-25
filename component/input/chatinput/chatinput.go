@@ -12,14 +12,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/severity1/claude-agent-tui/internal/accessibility"
+	"github.com/severity1/claude-agent-tui/internal/styles"
 	"github.com/severity1/claude-agent-tui/theme"
 )
-
-// reduceMotion checks if the user prefers reduced motion.
-// Respects the REDUCE_MOTION environment variable for accessibility.
-func reduceMotion() bool {
-	return os.Getenv("REDUCE_MOTION") != ""
-}
 
 // DefaultHistorySize is the default maximum number of history entries.
 const DefaultHistorySize = 100
@@ -78,19 +74,12 @@ type Model struct {
 	placeholder        string         // placeholder text (rendered by us, not bubbles textarea)
 
 	// Visual styling options
-	contentBg           lipgloss.TerminalColor // background color for all content inside borders
-	borderStyle         lipgloss.Border        // border style (Thick, Rounded, Normal, etc.)
-	borderLeft          bool                   // show left border (default: true)
-	borderRight         bool                   // show right border (default: true)
-	borderColor         lipgloss.TerminalColor // border color when not flashing
-	flashBorderColor    lipgloss.TerminalColor // border color during copy flash
-	flashDuration       time.Duration          // duration of copy flash animation
-	borderPaddingTop    int                    // top padding inside border
-	borderPaddingBottom int                    // bottom padding inside border
-	borderPaddingLeft   int                    // left padding inside border
-	borderPaddingRight  int                    // right padding inside border
-	textMutedColor      lipgloss.TerminalColor // muted text color for placeholder
-	focusStyle          lipgloss.Style         // style for border when focused
+	contentBg        lipgloss.TerminalColor // background color for all content inside borders
+	border           styles.BorderConfig    // consolidated border configuration
+	flashBorderColor lipgloss.TerminalColor // border color during copy flash (overrides border.Color)
+	flashDuration    time.Duration          // duration of copy flash animation
+	textMutedColor   lipgloss.TerminalColor // muted text color for placeholder
+	focusStyle       lipgloss.Style         // style for border when focused
 }
 
 // Option configures the Model.
@@ -133,15 +122,17 @@ func New(opts ...Option) Model {
 		modeStyle:          defaults.ModeStyle,
 		infoStyle:          defaults.InfoStyle,
 		// Visual styling defaults
-		contentBg:           defaults.ContentBg,
-		borderStyle:         defaults.Border,
-		borderLeft:          true, // default: show left border
-		borderRight:         true, // default: show right border
-		borderColor:         defaults.BorderColor,
-		flashBorderColor:    defaults.FlashBorderColor,
-		flashDuration:       defaults.FlashDuration,
-		borderPaddingTop:    defaults.BorderPaddingTop,
-		borderPaddingBottom: defaults.BorderPaddingBottom,
+		contentBg: defaults.ContentBg,
+		border: styles.BorderConfig{
+			Style:         defaults.Border,
+			Color:         defaults.BorderColor,
+			Left:          true, // default: show left border
+			Right:         true, // default: show right border
+			PaddingTop:    defaults.BorderPaddingTop,
+			PaddingBottom: defaults.BorderPaddingBottom,
+		},
+		flashBorderColor: defaults.FlashBorderColor,
+		flashDuration:    defaults.FlashDuration,
 		// Store colors for placeholder rendering
 		textMutedColor: defaults.TextMutedColor,
 	}
@@ -291,9 +282,9 @@ func WithContentBackground(color lipgloss.TerminalColor) Option {
 
 // WithBorderStyle sets the border style (e.g., ThickBorder, RoundedBorder, NormalBorder).
 // Default is lipgloss.ThickBorder().
-func WithBorderStyle(border lipgloss.Border) Option {
+func WithBorderStyle(b lipgloss.Border) Option {
 	return func(m *Model) {
-		m.borderStyle = border
+		m.border.Style = b
 	}
 }
 
@@ -302,7 +293,7 @@ func WithBorderStyle(border lipgloss.Border) Option {
 // Default is true.
 func WithBorderLeft(enabled bool) Option {
 	return func(m *Model) {
-		m.borderLeft = enabled
+		m.border.Left = enabled
 	}
 }
 
@@ -311,7 +302,7 @@ func WithBorderLeft(enabled bool) Option {
 // Default is true.
 func WithBorderRight(enabled bool) Option {
 	return func(m *Model) {
-		m.borderRight = enabled
+		m.border.Right = enabled
 	}
 }
 
@@ -319,7 +310,7 @@ func WithBorderRight(enabled bool) Option {
 // Default is style.Border. Accepts lipgloss.Color or lipgloss.AdaptiveColor.
 func WithBorderColor(color lipgloss.TerminalColor) Option {
 	return func(m *Model) {
-		m.borderColor = color
+		m.border.Color = color
 	}
 }
 
@@ -346,18 +337,15 @@ func WithFlashDuration(d time.Duration) Option {
 // Negative values are ignored for each parameter independently.
 func WithBorderPadding(top, bottom, left, right int) Option {
 	return func(m *Model) {
-		if top >= 0 {
-			m.borderPaddingTop = top
-		}
-		if bottom >= 0 {
-			m.borderPaddingBottom = bottom
-		}
-		if left >= 0 {
-			m.borderPaddingLeft = left
-		}
-		if right >= 0 {
-			m.borderPaddingRight = right
-		}
+		m.border = m.border.SetPaddingIfValid(top, bottom, left, right)
+	}
+}
+
+// WithBorderConfig sets the border configuration directly.
+// Use for bulk configuration when you need to set many border properties at once.
+func WithBorderConfig(cfg styles.BorderConfig) Option {
+	return func(m *Model) {
+		m.border = cfg
 	}
 }
 
@@ -386,14 +374,14 @@ func WithPalette(p *theme.Palette) Option {
 		m.focusedPromptStyle = s.FocusedPromptStyle
 		m.modeStyle = s.ModeStyle
 		m.infoStyle = s.InfoStyle
-		m.borderStyle = s.Border
-		m.borderColor = s.BorderColor
+		m.border.Style = s.Border
+		m.border.Color = s.BorderColor
+		m.border.PaddingTop = s.BorderPaddingTop
+		m.border.PaddingBottom = s.BorderPaddingBottom
 		m.flashBorderColor = s.FlashBorderColor
 		m.flashDuration = s.FlashDuration
 		m.contentBg = s.ContentBg
 		m.textMutedColor = s.TextMutedColor
-		m.borderPaddingTop = s.BorderPaddingTop
-		m.borderPaddingBottom = s.BorderPaddingBottom
 		// Update textarea styles
 		configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
 		configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
@@ -408,14 +396,14 @@ func WithStyles(s Styles) Option {
 		m.focusedPromptStyle = s.FocusedPromptStyle
 		m.modeStyle = s.ModeStyle
 		m.infoStyle = s.InfoStyle
-		m.borderStyle = s.Border
-		m.borderColor = s.BorderColor
+		m.border.Style = s.Border
+		m.border.Color = s.BorderColor
+		m.border.PaddingTop = s.BorderPaddingTop
+		m.border.PaddingBottom = s.BorderPaddingBottom
 		m.flashBorderColor = s.FlashBorderColor
 		m.flashDuration = s.FlashDuration
 		m.contentBg = s.ContentBg
 		m.textMutedColor = s.TextMutedColor
-		m.borderPaddingTop = s.BorderPaddingTop
-		m.borderPaddingBottom = s.BorderPaddingBottom
 		// Update textarea styles
 		configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
 		configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
@@ -630,7 +618,7 @@ func (m *Model) CopyCmd() tea.Cmd {
 	}
 
 	// Respect REDUCE_MOTION preference for accessibility
-	if reduceMotion() {
+	if accessibility.ReduceMotion() {
 		return copyCmd
 	}
 
@@ -691,21 +679,6 @@ func (m *Model) addToHistory(text string) {
 	if len(m.history) > m.historySize {
 		m.history = m.history[len(m.history)-m.historySize:]
 	}
-}
-
-// modifyBorderVisibility returns a copy of the border with invisible characters
-// for hidden sides. This allows space reservation while hiding the border visually.
-func modifyBorderVisibility(border lipgloss.Border, showLeft, showRight bool) lipgloss.Border {
-	result := border
-	if !showLeft {
-		result.Left = " "
-		result.MiddleLeft = " "
-	}
-	if !showRight {
-		result.Right = " "
-		result.MiddleRight = " "
-	}
-	return result
 }
 
 // View implements tea.Model.
@@ -803,27 +776,18 @@ func (m Model) View() string {
 		lipgloss.WithWhitespaceBackground(m.contentBg),
 	)
 
-	currentBorderColor := m.borderColor
+	// Determine current border color: flash color takes precedence over default
+	currentBorderColor := m.border.Color
 	if m.flashing {
 		currentBorderColor = m.flashBorderColor
 	}
 
-	// Modify border style for visibility (always reserve space, but use space chars when hidden)
-	borderStyle := modifyBorderVisibility(m.borderStyle, m.borderLeft, m.borderRight)
-
-	// Border with padding and content background for padding areas
+	// Apply border styling using the border package
 	// Width ensures content fits exactly, making right border visible
-	borderStyleRendered := lipgloss.NewStyle().
-		Width(contentWidth).
-		BorderLeft(true).
-		BorderRight(true).
-		BorderStyle(borderStyle).
-		BorderForeground(currentBorderColor).
-		PaddingTop(m.borderPaddingTop).
-		PaddingBottom(m.borderPaddingBottom).
-		PaddingLeft(m.borderPaddingLeft).
-		PaddingRight(m.borderPaddingRight).
-		Background(m.contentBg)
+	borderStyleRendered := m.border.ApplyToStyleWithColor(
+		lipgloss.NewStyle().Width(contentWidth),
+		currentBorderColor,
+	).Background(m.contentBg)
 
 	return borderStyleRendered.Render(innerContent)
 }
