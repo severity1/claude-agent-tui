@@ -83,7 +83,7 @@ func newModel() model {
 		chatinput.WithMode("Build"),
 		chatinput.WithInfoBar("Claude Sonnet 4.5"),
 		chatinput.WithFlashDuration(150*time.Millisecond),
-		chatinput.WithBorderPadding(1, 1),
+		chatinput.WithBorderPadding(1, 1, 0, 0),
 	)
 	focusCmd := input.Focus()
 

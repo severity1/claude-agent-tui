@@ -87,7 +87,10 @@ type Model struct {
 	flashDuration       time.Duration          // duration of copy flash animation
 	borderPaddingTop    int                    // top padding inside border
 	borderPaddingBottom int                    // bottom padding inside border
+	borderPaddingLeft   int                    // left padding inside border
+	borderPaddingRight  int                    // right padding inside border
 	textMutedColor      lipgloss.TerminalColor // muted text color for placeholder
+	focusStyle          lipgloss.Style         // style for border when focused
 }
 
 // Option configures the Model.
@@ -338,9 +341,10 @@ func WithFlashDuration(d time.Duration) Option {
 	}
 }
 
-// WithBorderPadding sets the top and bottom padding inside the border.
-// Default is (1, 1).
-func WithBorderPadding(top, bottom int) Option {
+// WithBorderPadding sets the padding inside the border.
+// Default is (1, 1, 0, 0) for top, bottom, left, right.
+// Negative values are ignored for each parameter independently.
+func WithBorderPadding(top, bottom, left, right int) Option {
 	return func(m *Model) {
 		if top >= 0 {
 			m.borderPaddingTop = top
@@ -348,6 +352,20 @@ func WithBorderPadding(top, bottom int) Option {
 		if bottom >= 0 {
 			m.borderPaddingBottom = bottom
 		}
+		if left >= 0 {
+			m.borderPaddingLeft = left
+		}
+		if right >= 0 {
+			m.borderPaddingRight = right
+		}
+	}
+}
+
+// WithFocusStyle sets the style applied to the border when focused.
+// This provides general focus styling separate from WithFocusedPromptStyle.
+func WithFocusStyle(style lipgloss.Style) Option {
+	return func(m *Model) {
+		m.focusStyle = style
 	}
 }
 
@@ -803,6 +821,8 @@ func (m Model) View() string {
 		BorderForeground(currentBorderColor).
 		PaddingTop(m.borderPaddingTop).
 		PaddingBottom(m.borderPaddingBottom).
+		PaddingLeft(m.borderPaddingLeft).
+		PaddingRight(m.borderPaddingRight).
 		Background(m.contentBg)
 
 	return borderStyleRendered.Render(innerContent)

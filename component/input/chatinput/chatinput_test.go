@@ -995,6 +995,18 @@ func TestNew_WithFocusedPromptStyle(t *testing.T) {
 	}
 }
 
+func TestNew_WithFocusStyle(t *testing.T) {
+	// Custom focus style for border
+	customStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff00"))
+	m := chatinput.New(chatinput.WithFocusStyle(customStyle))
+
+	// Model should be created without error
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom focus style")
+	}
+}
+
 func TestModel_View_FocusedPromptStyleApplied(t *testing.T) {
 	// Verify that the component can render with both focused and unfocused states
 	// Note: lipgloss disables colors when not connected to a TTY, so we test
@@ -1444,11 +1456,11 @@ func TestNew_WithFlashDuration_Zero(t *testing.T) {
 }
 
 func TestNew_WithBorderPadding(t *testing.T) {
-	// Default has 1,1 padding. Setting to 0,0 should result in shorter view
+	// Default has 1,1,0,0 padding. Setting to 0,0,0,0 should result in shorter view
 	mDefault := chatinput.New(chatinput.WithWidth(60))
 	mNoPadding := chatinput.New(
 		chatinput.WithWidth(60),
-		chatinput.WithBorderPadding(0, 0),
+		chatinput.WithBorderPadding(0, 0, 0, 0),
 	)
 
 	viewDefault := mDefault.View()
@@ -1468,7 +1480,7 @@ func TestNew_WithBorderPadding_NegativeIgnored(t *testing.T) {
 	// Negative values should be ignored
 	m := chatinput.New(
 		chatinput.WithWidth(60),
-		chatinput.WithBorderPadding(-1, -1),
+		chatinput.WithBorderPadding(-1, -1, -1, -1),
 	)
 
 	view := m.View()
@@ -1486,7 +1498,7 @@ func TestNew_VisualOptions_Combined(t *testing.T) {
 		chatinput.WithBorderColor(lipgloss.Color("#4a4a6a")),
 		chatinput.WithFlashBorderColor(lipgloss.Color("#e94560")),
 		chatinput.WithFlashDuration(300*time.Millisecond),
-		chatinput.WithBorderPadding(2, 2),
+		chatinput.WithBorderPadding(2, 2, 0, 0),
 	)
 
 	view := m.View()
