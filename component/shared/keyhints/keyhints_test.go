@@ -2394,3 +2394,105 @@ func TestModel_Overlay_Animation_Completes(t *testing.T) {
 		t.Error("ShowHelp overlay animation should keep help visible after completion")
 	}
 }
+
+// ============================================================================
+// Width Getter Tests
+// ============================================================================
+
+func TestModel_Width_ReturnsConfiguredWidth(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	m := keyhints.New(bindings, keyhints.WithWidth(80))
+
+	if m.Width() != 80 {
+		t.Errorf("Width() = %d, want 80", m.Width())
+	}
+}
+
+func TestModel_Width_ReturnsZeroIfNotSet(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	m := keyhints.New(bindings)
+
+	if m.Width() != 0 {
+		t.Errorf("Width() = %d for new model without width, want 0", m.Width())
+	}
+}
+
+func TestModel_Width_UpdatedBySetWidth(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	m := keyhints.New(bindings, keyhints.WithWidth(60))
+
+	m.SetWidth(120)
+
+	if m.Width() != 120 {
+		t.Errorf("Width() = %d after SetWidth(120), want 120", m.Width())
+	}
+}
+
+// ============================================================================
+// WithBorderColor Tests
+// ============================================================================
+
+func TestNew_WithBorderColor(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	m := keyhints.New(bindings, keyhints.WithBorderColor(lipgloss.Color("#FF0000")))
+
+	// Verify model is created without error
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom border color")
+	}
+}
+
+func TestNew_WithBorderColor_AdaptiveColor(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	color := lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"}
+	m := keyhints.New(bindings, keyhints.WithBorderColor(color))
+
+	// Verify model is created without error
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with adaptive border color")
+	}
+}
+
+// ============================================================================
+// WithBorderPadding Validation Tests
+// ============================================================================
+
+func TestNew_WithBorderPadding(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	m := keyhints.New(bindings, keyhints.WithBorderPadding(1, 1, 2, 2))
+
+	// Verify model is created without error
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with custom border padding")
+	}
+}
+
+func TestNew_WithBorderPadding_NegativeIgnored(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	// Negative values should be ignored, keeping defaults
+	m := keyhints.New(bindings,
+		keyhints.WithBorderPadding(1, 1, 1, 1),     // Set to known values
+		keyhints.WithBorderPadding(-1, -1, -1, -1), // Try to set negative - should be ignored
+	)
+
+	// Verify model is created without error
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string when negative padding was provided")
+	}
+}
+
+func TestNew_WithBorderPadding_PartialNegativeIgnored(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
+	// Mix of valid and negative values - negative should be ignored
+	m := keyhints.New(bindings, keyhints.WithBorderPadding(2, -1, 3, -1))
+
+	// Verify model is created without error
+	view := m.View()
+	if view == "" {
+		t.Error("View() returned empty string with partially negative padding")
+	}
+}

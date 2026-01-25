@@ -278,12 +278,29 @@ func WithBorderRight(enabled bool) Option {
 
 // WithBorderPadding sets the padding inside the border for inline and attached modes.
 // Default is (0, 0, 1, 0) for top, bottom, left, right.
+// Negative values are ignored for each parameter independently.
 func WithBorderPadding(top, bottom, left, right int) Option {
 	return func(m *Model) {
-		m.borderPaddingTop = top
-		m.borderPaddingBottom = bottom
-		m.borderPaddingLeft = left
-		m.borderPaddingRight = right
+		if top >= 0 {
+			m.borderPaddingTop = top
+		}
+		if bottom >= 0 {
+			m.borderPaddingBottom = bottom
+		}
+		if left >= 0 {
+			m.borderPaddingLeft = left
+		}
+		if right >= 0 {
+			m.borderPaddingRight = right
+		}
+	}
+}
+
+// WithBorderColor sets the border color when not focused.
+// When focused, the focusStyle foreground color takes precedence.
+func WithBorderColor(color lipgloss.TerminalColor) Option {
+	return func(m *Model) {
+		m.borderColor = color
 	}
 }
 
@@ -418,6 +435,12 @@ func (m *Model) SetExpanded(expanded bool) {
 // This affects both the inline View() truncation and ViewHelp() width in attached modes.
 func (m *Model) SetWidth(width int) {
 	m.width = width
+}
+
+// Width returns the current configured width.
+// Returns 0 if no width was explicitly set.
+func (m Model) Width() int {
+	return m.width
 }
 
 // Focus sets the focused state and returns nil (no cursor blink needed for this component).
@@ -748,8 +771,20 @@ func (m Model) ViewHelp() string {
 		return m.renderHelpContent("No keybindings defined", m.width)
 	}
 
+	// Create styles with background for consistent rendering.
+	// Without this, styled text would show terminal default background
+	// while the container's WithWhitespaceBackground only fills empty space.
+	keyStyle := m.keyStyle
+	descStyle := m.descStyle
+	sepStyle := m.sepStyle
+	if m.contentBg != nil {
+		keyStyle = keyStyle.Background(m.contentBg)
+		descStyle = descStyle.Background(m.contentBg)
+		sepStyle = sepStyle.Background(m.contentBg)
+	}
+
 	var sb strings.Builder
-	sb.WriteString(m.keyStyle.Render("Keyboard Shortcuts"))
+	sb.WriteString(keyStyle.Render("Keyboard Shortcuts"))
 	sb.WriteString("\n\n")
 
 	// Find max key display width for alignment (handles Unicode)
@@ -768,13 +803,13 @@ func (m Model) ViewHelp() string {
 		if keyWidth < maxKeyWidth {
 			padding = strings.Repeat(" ", maxKeyWidth-keyWidth)
 		}
-		key := m.keyStyle.Render(b.Key + padding)
-		desc := m.descStyle.Render(b.Desc)
-		fmt.Fprintf(&sb, "%s  %s\n", key, desc)
+		key := keyStyle.Render(b.Key + padding + "  ")
+		desc := descStyle.Render(b.Desc)
+		fmt.Fprintf(&sb, "%s%s\n", key, desc)
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(m.sepStyle.Render("Press ? or Esc to close"))
+	sb.WriteString(sepStyle.Render("Press ? or Esc to close"))
 
 	return m.renderHelpContent(sb.String(), m.width)
 }
