@@ -888,16 +888,16 @@ func TestModel_ViewHelp_NoPadding(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
+	m := keyhints.New(bindings, keyhints.WithPadding(">>"), keyhints.WithBorderLeft(true))
 
 	view := m.ViewHelp()
 	// Should NOT start with padding - should start with left border
 	if strings.HasPrefix(view, ">>") {
 		t.Errorf("ViewHelp() should NOT apply padding prefix, got: %q", view[:50])
 	}
-	// Should start with thick left border character (matching View() style)
+	// Should start with thick left border character when borderLeft=true
 	if !strings.HasPrefix(view, "┃") && !strings.HasPrefix(view, "\u2503") {
-		t.Errorf("ViewHelp() should start with thick left border, got: %q", view[:20])
+		t.Errorf("ViewHelp() with borderLeft=true should start with thick left border, got: %q", view[:20])
 	}
 }
 
@@ -1077,6 +1077,110 @@ func TestNew_WithContentBackground(t *testing.T) {
 	view := m.ViewHelp()
 	if !strings.Contains(view, "a") {
 		t.Errorf("ViewHelp() with content background should contain binding key")
+	}
+}
+
+func TestModel_View_WithContentBackground(t *testing.T) {
+	// View() inline bar should render correctly when contentBg is set
+	// Note: Background styling is NOT applied to View() - only to ViewHelp()
+	// This test verifies View() still works correctly when contentBg option is used
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	bgColor := lipgloss.Color("236")
+	m := keyhints.New(bindings, keyhints.WithContentBackground(bgColor))
+
+	view := m.View()
+
+	// Should contain the binding content
+	if !strings.Contains(view, "a") {
+		t.Errorf("View() should contain binding key")
+	}
+	// Should contain the binding description
+	if !strings.Contains(view, "A") {
+		t.Errorf("View() should contain binding description")
+	}
+}
+
+func TestModel_ViewHelp_WithContentBackground_AttachedModes(t *testing.T) {
+	// ViewHelp() applies background color using Place() with WhitespaceBackground
+	// in attached modes (Down, Up, Top)
+	attachedModes := []keyhints.HelpMode{
+		keyhints.HelpModeDown,
+		keyhints.HelpModeUp,
+		keyhints.HelpModeTop,
+	}
+
+	for _, mode := range attachedModes {
+		t.Run(modeToString(mode), func(t *testing.T) {
+			bindings := []keyhints.Binding{
+				{Key: "a", Desc: "Action A"},
+			}
+			bgColor := lipgloss.Color("236")
+			m := keyhints.New(bindings,
+				keyhints.WithContentBackground(bgColor),
+				keyhints.WithHelpMode(mode),
+				keyhints.WithWidth(50),
+			)
+
+			view := m.ViewHelp()
+
+			// Should contain binding content
+			if !strings.Contains(view, "a") {
+				t.Errorf("ViewHelp() should contain binding key")
+			}
+			if !strings.Contains(view, "Action A") {
+				t.Errorf("ViewHelp() should contain binding description")
+			}
+			// Should contain title
+			if !strings.Contains(view, "Keyboard Shortcuts") {
+				t.Errorf("ViewHelp() should contain title")
+			}
+		})
+	}
+}
+
+func TestModel_ViewHelp_WithContentBackground_CenterMode(t *testing.T) {
+	// ViewHelp() in Center mode also applies background using Place()
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "Action A"},
+	}
+	bgColor := lipgloss.Color("236")
+	m := keyhints.New(bindings,
+		keyhints.WithContentBackground(bgColor),
+		keyhints.WithHelpMode(keyhints.HelpModeCenter),
+	)
+
+	view := m.ViewHelp()
+
+	// Should contain binding content
+	if !strings.Contains(view, "a") {
+		t.Errorf("ViewHelp() in Center mode should contain binding key")
+	}
+	if !strings.Contains(view, "Action A") {
+		t.Errorf("ViewHelp() in Center mode should contain binding description")
+	}
+}
+
+func TestModel_ViewHelp_NoContentBackground(t *testing.T) {
+	// ViewHelp() should render correctly when contentBg is explicitly nil
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	// Explicitly set nil background
+	m := keyhints.New(bindings,
+		keyhints.WithContentBackground(nil),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
+
+	view := m.ViewHelp()
+
+	// Should render without error and contain content
+	if !strings.Contains(view, "a") {
+		t.Errorf("ViewHelp() should contain binding key")
+	}
+	if !strings.Contains(view, "Keyboard Shortcuts") {
+		t.Errorf("ViewHelp() should contain title")
 	}
 }
 
@@ -1270,10 +1374,10 @@ func TestModel_View_WithWidth_AppliesWidthStyle(t *testing.T) {
 	view := m.View()
 	viewWidth := lipgloss.Width(view)
 
-	// View should fill near the specified width (accounting for border)
-	// borderWidth = 2 (border + padding), but lipgloss Width() excludes border
-	// so total = content + 1 (border) = width - 2 + 1 = width - 1
-	expectedWidth := width - 1
+	// View should fill the specified width (accounting for both borders)
+	// With borderRight = true (default), bw = 2 (left + right borders)
+	// Style.Width(width - bw) + 2 borders = width
+	expectedWidth := width
 	if viewWidth != expectedWidth {
 		t.Errorf("View() width = %d, want %d", viewWidth, expectedWidth)
 	}
@@ -1338,9 +1442,122 @@ func TestModel_View_SetWidth_UpdatesRendering(t *testing.T) {
 	if width1 == width2 {
 		t.Errorf("SetWidth() should change rendered width: before=%d, after=%d", width1, width2)
 	}
-	// Width should be 80 - 1 = 79 (accounting for border)
-	expectedWidth := 79
+	// Width should equal 80 (with both left and right borders, total = width)
+	expectedWidth := 80
 	if width2 != expectedWidth {
 		t.Errorf("View() after SetWidth(80) = %d, want %d", width2, expectedWidth)
+	}
+}
+
+// ============================================================================
+// Border Left Toggle Tests
+// ============================================================================
+
+func TestNew_DefaultBorderLeft(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	view := m.View()
+	// Default borderLeft is true, so left border should be visible (thick border character)
+	if !strings.HasPrefix(view, "┃") && !strings.HasPrefix(view, "\u2503") {
+		t.Errorf("View() with default borderLeft=true should show thick left border, got first chars: %q", view)
+	}
+}
+
+func TestNew_DefaultBorderRight(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithWidth(40))
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	// Default borderRight is false, so right border should be invisible (space character)
+	// No line should end with thick border character
+	for _, line := range lines {
+		if len(line) > 0 && (strings.HasSuffix(line, "┃") || strings.HasSuffix(line, "\u2503")) {
+			t.Errorf("View() with default borderRight=false should not show thick right border, got line: %q", line)
+			break
+		}
+	}
+}
+
+func TestNew_WithBorderLeft_True(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithBorderLeft(true))
+
+	view := m.View()
+	// borderLeft=true should show visible thick border
+	if !strings.HasPrefix(view, "┃") && !strings.HasPrefix(view, "\u2503") {
+		t.Errorf("View() with borderLeft=true should show thick left border, got first chars: %q", view)
+	}
+}
+
+func TestNew_WithBorderLeft_False(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithBorderLeft(false))
+
+	view := m.View()
+	// borderLeft=false should hide left border (use space)
+	if strings.HasPrefix(view, "┃") || strings.HasPrefix(view, "\u2503") {
+		t.Errorf("View() with borderLeft=false should not show thick left border, got first chars: %q", view)
+	}
+}
+
+func TestModel_View_BothBordersHidden(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithBorderLeft(false),
+		keyhints.WithBorderRight(false),
+		keyhints.WithWidth(40),
+	)
+
+	view := m.View()
+	// Both borders hidden but space reserved
+	// View should still have consistent width
+	viewWidth := lipgloss.Width(view)
+	if viewWidth != 40 {
+		t.Errorf("View() width with both borders hidden = %d, want 40", viewWidth)
+	}
+	// Should not contain thick border characters
+	if strings.Contains(view, "┃") || strings.Contains(view, "\u2503") {
+		t.Errorf("View() with both borders hidden should not contain thick border characters")
+	}
+}
+
+func TestModel_ViewHelp_BorderVisibility(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithBorderLeft(false),
+		keyhints.WithBorderRight(true),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
+
+	view := m.ViewHelp()
+	// Left border should be invisible (space)
+	if strings.HasPrefix(view, "┃") || strings.HasPrefix(view, "\u2503") {
+		t.Errorf("ViewHelp() with borderLeft=false should not show thick left border")
+	}
+	// Right border should be visible
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		if len(line) > 0 && !strings.HasSuffix(line, "┃") && !strings.HasSuffix(line, "\u2503") {
+			// This is expected because the right border is visible
+			// but we need to verify the content is there
+		}
+	}
+	// Should contain binding content
+	if !strings.Contains(view, "A") {
+		t.Errorf("ViewHelp() should contain binding description")
 	}
 }

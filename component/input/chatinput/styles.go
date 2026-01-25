@@ -11,8 +11,11 @@ import (
 // Use DefaultStyles() for sensible defaults or StylesFromPalette() to derive
 // styles from a theme palette.
 type Styles struct {
-	// PromptStyle is the style for the prompt prefix (e.g., "> ").
+	// PromptStyle is the style for the prompt prefix when unfocused (e.g., "> ").
 	PromptStyle lipgloss.Style
+	// FocusedPromptStyle is the style for the prompt prefix when focused.
+	// This allows the prompt to "light up" when the input has focus.
+	FocusedPromptStyle lipgloss.Style
 	// ModeStyle is the style for the mode indicator (e.g., "Build").
 	ModeStyle lipgloss.Style
 	// InfoStyle is the style for the info bar text.
@@ -60,6 +63,11 @@ func DefaultStyles() Styles {
 		PromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
 			Bold(true).
+			Foreground(textMuted).
+			Background(surface),
+		FocusedPromptStyle: lipgloss.NewStyle().
+			Padding(0, 0, 0, 1).
+			Bold(true).
 			Foreground(primary).
 			Background(surface),
 		ModeStyle: lipgloss.NewStyle().
@@ -97,6 +105,11 @@ func StylesFromPalette(p *theme.Palette) Styles {
 
 	return Styles{
 		PromptStyle: lipgloss.NewStyle().
+			Padding(0, 0, 0, 1).
+			Bold(true).
+			Foreground(p.TextMuted).
+			Background(p.BackgroundPanel),
+		FocusedPromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
 			Bold(true).
 			Foreground(p.Primary).

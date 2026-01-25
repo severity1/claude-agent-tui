@@ -57,28 +57,31 @@ const DefaultPrompt = ""
 
 // Model represents the chat input component state.
 type Model struct {
-	textarea    textarea.Model
-	focused     bool
-	history     []string
-	historyIdx  int // -1 means "new input", 0+ means position in history (0 = most recent)
-	historySize int
-	draft       string // saved draft when navigating history
-	showCounter bool   // whether to show character/line count
-	width       int    // stored width for counter display
-	prompt      string // prompt prefix shown before textarea
-	promptStyle lipgloss.Style
-	minHeight   int            // minimum visible lines (default: 1)
-	maxHeight   int            // maximum lines before scroll (default: 10)
-	mode        string         // mode indicator (e.g., "Build", "Shell") - left of infoBar
-	modeStyle   lipgloss.Style // style for mode indicator
-	infoBar     string         // bottom info text (e.g., "Claude Sonnet 4.5")
-	infoStyle   lipgloss.Style // style for info bar
-	flashing    bool           // true during copy flash animation
-	placeholder string         // placeholder text (rendered by us, not bubbles textarea)
+	textarea           textarea.Model
+	focused            bool
+	history            []string
+	historyIdx         int // -1 means "new input", 0+ means position in history (0 = most recent)
+	historySize        int
+	draft              string // saved draft when navigating history
+	showCounter        bool   // whether to show character/line count
+	width              int    // stored width for counter display
+	prompt             string // prompt prefix shown before textarea
+	promptStyle        lipgloss.Style
+	focusedPromptStyle lipgloss.Style
+	minHeight          int            // minimum visible lines (default: 1)
+	maxHeight          int            // maximum lines before scroll (default: 10)
+	mode               string         // mode indicator (e.g., "Build", "Shell") - left of infoBar
+	modeStyle          lipgloss.Style // style for mode indicator
+	infoBar            string         // bottom info text (e.g., "Claude Sonnet 4.5")
+	infoStyle          lipgloss.Style // style for info bar
+	flashing           bool           // true during copy flash animation
+	placeholder        string         // placeholder text (rendered by us, not bubbles textarea)
 
 	// Visual styling options
 	contentBg           lipgloss.TerminalColor // background color for all content inside borders
 	borderStyle         lipgloss.Border        // border style (Thick, Rounded, Normal, etc.)
+	borderLeft          bool                   // show left border (default: true)
+	borderRight         bool                   // show right border (default: true)
 	borderColor         lipgloss.TerminalColor // border color when not flashing
 	flashBorderColor    lipgloss.TerminalColor // border color during copy flash
 	flashDuration       time.Duration          // duration of copy flash animation
@@ -115,19 +118,22 @@ func New(opts ...Option) Model {
 	configureTextareaStyle(&ta.FocusedStyle, defaults.TextColor, defaults.TextMutedColor, defaults.ContentBg)
 
 	m := Model{
-		textarea:    ta,
-		history:     []string{},
-		historyIdx:  -1,
-		historySize: DefaultHistorySize,
-		prompt:      DefaultPrompt,
-		promptStyle: defaults.PromptStyle,
-		minHeight:   1,  // single line by default
-		maxHeight:   10, // reasonable scroll point
-		modeStyle:   defaults.ModeStyle,
-		infoStyle:   defaults.InfoStyle,
+		textarea:           ta,
+		history:            []string{},
+		historyIdx:         -1,
+		historySize:        DefaultHistorySize,
+		prompt:             DefaultPrompt,
+		promptStyle:        defaults.PromptStyle,
+		focusedPromptStyle: defaults.FocusedPromptStyle,
+		minHeight:          1,  // single line by default
+		maxHeight:          10, // reasonable scroll point
+		modeStyle:          defaults.ModeStyle,
+		infoStyle:          defaults.InfoStyle,
 		// Visual styling defaults
 		contentBg:           defaults.ContentBg,
 		borderStyle:         defaults.Border,
+		borderLeft:          true, // default: show left border
+		borderRight:         true, // default: show right border
 		borderColor:         defaults.BorderColor,
 		flashBorderColor:    defaults.FlashBorderColor,
 		flashDuration:       defaults.FlashDuration,
@@ -208,10 +214,18 @@ func WithPrompt(prompt string) Option {
 	}
 }
 
-// WithPromptStyle sets the style for the prompt prefix.
+// WithPromptStyle sets the style for the prompt prefix when unfocused.
 func WithPromptStyle(s lipgloss.Style) Option {
 	return func(m *Model) {
 		m.promptStyle = s
+	}
+}
+
+// WithFocusedPromptStyle sets the style for the prompt prefix when focused.
+// This allows the prompt to "light up" when the input has focus.
+func WithFocusedPromptStyle(s lipgloss.Style) Option {
+	return func(m *Model) {
+		m.focusedPromptStyle = s
 	}
 }
 
@@ -280,6 +294,24 @@ func WithBorderStyle(border lipgloss.Border) Option {
 	}
 }
 
+// WithBorderLeft enables or disables the left border visibility.
+// When false, the border space is still reserved but the border character is invisible (space).
+// Default is true.
+func WithBorderLeft(enabled bool) Option {
+	return func(m *Model) {
+		m.borderLeft = enabled
+	}
+}
+
+// WithBorderRight enables or disables the right border visibility.
+// When false, the border space is still reserved but the border character is invisible (space).
+// Default is true.
+func WithBorderRight(enabled bool) Option {
+	return func(m *Model) {
+		m.borderRight = enabled
+	}
+}
+
 // WithBorderColor sets the border color when not flashing.
 // Default is style.Border. Accepts lipgloss.Color or lipgloss.AdaptiveColor.
 func WithBorderColor(color lipgloss.TerminalColor) Option {
@@ -333,6 +365,7 @@ func WithPalette(p *theme.Palette) Option {
 		}
 		s := StylesFromPalette(p)
 		m.promptStyle = s.PromptStyle
+		m.focusedPromptStyle = s.FocusedPromptStyle
 		m.modeStyle = s.ModeStyle
 		m.infoStyle = s.InfoStyle
 		m.borderStyle = s.Border
@@ -354,6 +387,7 @@ func WithPalette(p *theme.Palette) Option {
 func WithStyles(s Styles) Option {
 	return func(m *Model) {
 		m.promptStyle = s.PromptStyle
+		m.focusedPromptStyle = s.FocusedPromptStyle
 		m.modeStyle = s.ModeStyle
 		m.infoStyle = s.InfoStyle
 		m.borderStyle = s.Border
@@ -641,6 +675,21 @@ func (m *Model) addToHistory(text string) {
 	}
 }
 
+// modifyBorderVisibility returns a copy of the border with invisible characters
+// for hidden sides. This allows space reservation while hiding the border visually.
+func modifyBorderVisibility(border lipgloss.Border, showLeft, showRight bool) lipgloss.Border {
+	result := border
+	if !showLeft {
+		result.Left = " "
+		result.MiddleLeft = " "
+	}
+	if !showRight {
+		result.Right = " "
+		result.MiddleRight = " "
+	}
+	return result
+}
+
 // View implements tea.Model.
 // Note: This method intentionally mutates the receiver's textarea height
 // to implement auto-expansion. This is safe because Bubble Tea treats
@@ -650,7 +699,12 @@ func (m Model) View() string {
 	displayHeight := m.Height()
 	m.textarea.SetHeight(displayHeight) // Intentional mutation for auto-expansion
 
-	prompt := m.promptStyle.Render(m.prompt)
+	// Select prompt style based on focus state - "light up" when focused
+	promptStyle := m.promptStyle
+	if m.focused {
+		promptStyle = m.focusedPromptStyle
+	}
+	prompt := promptStyle.Render(m.prompt)
 	promptWidth := lipgloss.Width(prompt)
 
 	// Calculate content dimensions (inside borders)
@@ -736,13 +790,16 @@ func (m Model) View() string {
 		currentBorderColor = m.flashBorderColor
 	}
 
+	// Modify border style for visibility (always reserve space, but use space chars when hidden)
+	borderStyle := modifyBorderVisibility(m.borderStyle, m.borderLeft, m.borderRight)
+
 	// Border with padding and content background for padding areas
 	// Width ensures content fits exactly, making right border visible
 	borderStyleRendered := lipgloss.NewStyle().
 		Width(contentWidth).
 		BorderLeft(true).
 		BorderRight(true).
-		BorderStyle(m.borderStyle).
+		BorderStyle(borderStyle).
 		BorderForeground(currentBorderColor).
 		PaddingTop(m.borderPaddingTop).
 		PaddingBottom(m.borderPaddingBottom).

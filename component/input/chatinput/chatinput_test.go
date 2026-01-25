@@ -984,6 +984,53 @@ func TestNew_WithPromptStyle(t *testing.T) {
 	}
 }
 
+func TestNew_WithFocusedPromptStyle(t *testing.T) {
+	// Custom focused prompt style
+	customStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff0000"))
+	m := chatinput.New(chatinput.WithFocusedPromptStyle(customStyle))
+
+	// Model should be created without error
+	if m.Prompt() != "" {
+		t.Errorf("WithFocusedPromptStyle should not affect prompt text, got %q", m.Prompt())
+	}
+}
+
+func TestModel_View_FocusedPromptStyleApplied(t *testing.T) {
+	// Verify that the component can render with both focused and unfocused states
+	// Note: lipgloss disables colors when not connected to a TTY, so we test
+	// that both views render without error rather than comparing ANSI codes
+
+	unfocusedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+	focusedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff0000"))
+
+	m := chatinput.New(
+		chatinput.WithPrompt(">"),
+		chatinput.WithPromptStyle(unfocusedStyle),
+		chatinput.WithFocusedPromptStyle(focusedStyle),
+	)
+
+	// Get unfocused view
+	unfocusedView := m.View()
+	if unfocusedView == "" {
+		t.Error("unfocused View() returned empty string")
+	}
+	// Verify prompt is present
+	if !strings.Contains(unfocusedView, ">") {
+		t.Error("unfocused View() should contain prompt character")
+	}
+
+	// Focus and get focused view
+	m.Focus()
+	focusedView := m.View()
+	if focusedView == "" {
+		t.Error("focused View() returned empty string")
+	}
+	// Verify prompt is present in focused view too
+	if !strings.Contains(focusedView, ">") {
+		t.Error("focused View() should contain prompt character")
+	}
+}
+
 // ============================================================================
 // Runtime Width/Height Tests
 // ============================================================================
@@ -1510,5 +1557,141 @@ func TestModel_CopyCmd_WhenUnfocused(t *testing.T) {
 	// Flash state should be set even when unfocused
 	if !m.Flashing() {
 		t.Error("Flashing() = false after CopyCmd when unfocused, want true")
+	}
+}
+
+// ============================================================================
+// Border Left/Right Toggle Tests
+// ============================================================================
+
+func TestNew_DefaultBorderLeft(t *testing.T) {
+	m := chatinput.New(chatinput.WithWidth(60))
+
+	view := m.View()
+	// Default borderLeft is true, so left border should be visible (thick border character)
+	if !strings.Contains(view, "┃") && !strings.Contains(view, "\u2503") {
+		t.Errorf("View() with default borderLeft=true should show thick left border, got: %s", view)
+	}
+}
+
+func TestNew_DefaultBorderRight(t *testing.T) {
+	m := chatinput.New(chatinput.WithWidth(60))
+
+	view := m.View()
+	// Default borderRight is true, so right border should be visible
+	if !strings.Contains(view, "┃") && !strings.Contains(view, "\u2503") {
+		t.Errorf("View() with default borderRight=true should show thick border, got: %s", view)
+	}
+}
+
+func TestNew_WithBorderLeft_False(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderLeft(false),
+	)
+
+	view := m.View()
+	// borderLeft=false should hide left border (use space)
+	// View should start with a space character instead of thick border
+	if strings.HasPrefix(view, "┃") || strings.HasPrefix(view, "\u2503") {
+		t.Errorf("View() with borderLeft=false should not start with thick left border, got first char: %q", view[:10])
+	}
+}
+
+func TestNew_WithBorderRight_False(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderRight(false),
+	)
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	// At least one line should NOT end with thick border character
+	hasInvisibleRight := false
+	for _, line := range lines {
+		if len(line) > 0 && !strings.HasSuffix(line, "┃") && !strings.HasSuffix(line, "\u2503") {
+			hasInvisibleRight = true
+			break
+		}
+	}
+	if !hasInvisibleRight {
+		t.Errorf("View() with borderRight=false should have invisible right border")
+	}
+}
+
+func TestNew_WithBorderLeft_True(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderLeft(true),
+	)
+
+	view := m.View()
+	// borderLeft=true should show visible thick border
+	if !strings.HasPrefix(view, "┃") && !strings.HasPrefix(view, "\u2503") {
+		t.Errorf("View() with borderLeft=true should start with thick left border, got: %q", view[:20])
+	}
+}
+
+func TestNew_WithBorderRight_True(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderRight(true),
+	)
+
+	view := m.View()
+	// borderRight=true should show visible thick border on the right
+	lines := strings.Split(view, "\n")
+	hasVisibleRight := false
+	for _, line := range lines {
+		if len(line) > 0 && (strings.HasSuffix(line, "┃") || strings.HasSuffix(line, "\u2503")) {
+			hasVisibleRight = true
+			break
+		}
+	}
+	if !hasVisibleRight {
+		t.Errorf("View() with borderRight=true should have visible right border")
+	}
+}
+
+func TestModel_View_BothBordersHidden(t *testing.T) {
+	m := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderLeft(false),
+		chatinput.WithBorderRight(false),
+	)
+
+	view := m.View()
+	// Both borders hidden but space reserved
+	// Should not start with thick border
+	if strings.HasPrefix(view, "┃") || strings.HasPrefix(view, "\u2503") {
+		t.Errorf("View() with both borders hidden should not start with thick border")
+	}
+	// View should still render correctly
+	if view == "" {
+		t.Error("View() with both borders hidden returned empty string")
+	}
+}
+
+func TestModel_View_BordersPreserveWidth(t *testing.T) {
+	// Test that hidden borders still reserve space (width remains consistent)
+	m1 := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderLeft(true),
+		chatinput.WithBorderRight(true),
+	)
+	m2 := chatinput.New(
+		chatinput.WithWidth(60),
+		chatinput.WithBorderLeft(false),
+		chatinput.WithBorderRight(false),
+	)
+
+	view1 := m1.View()
+	view2 := m2.View()
+
+	// Both should have the same number of lines (height)
+	lines1 := strings.Count(view1, "\n")
+	lines2 := strings.Count(view2, "\n")
+	if lines1 != lines2 {
+		t.Errorf("View() line count differs: visible borders=%d, hidden borders=%d", lines1, lines2)
 	}
 }

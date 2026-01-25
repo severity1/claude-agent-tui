@@ -5,7 +5,7 @@
 #   vhs validate example/chatinput/chatinput.tape  # Syntax check
 #   vhs example/chatinput/chatinput.tape           # Generate screenshots
 #
-# This tape captures 11 key interaction states for visual regression testing.
+# This tape captures 15 key interaction states for visual regression testing.
 # Includes theme switching to demonstrate the theme discovery API.
 
 # Terminal configuration
@@ -71,17 +71,32 @@ Tab
 Sleep 500ms
 Screenshot example/chatinput/screenshots/09-focus-keyhints.png
 
-# Screenshot 11: Help window (? when hints focused)
+# Screenshot 11: Help window in Down mode (? when hints focused)
 Type "?"
 Sleep 500ms
-Screenshot example/chatinput/screenshots/10-help-window.png
+Screenshot example/chatinput/screenshots/10-help-window-down.png
 
-# Screenshot 12: Clear state (Esc to close help, Esc to return to input)
+# Screenshot 12: Cycle to Up mode (Shift+H key)
+Shift+H
+Sleep 500ms
+Screenshot example/chatinput/screenshots/11-help-mode-up.png
+
+# Screenshot 13: Cycle to Top mode (Shift+H key)
+Shift+H
+Sleep 500ms
+Screenshot example/chatinput/screenshots/12-help-mode-top.png
+
+# Screenshot 14: Cycle to Center mode (Shift+H key)
+Shift+H
+Sleep 500ms
+Screenshot example/chatinput/screenshots/13-help-mode-center.png
+
+# Screenshot 15: Clear state (Esc to close help, Esc to return to input)
 Escape
 Sleep 300ms
 Escape
 Sleep 500ms
-Screenshot example/chatinput/screenshots/11-clear-state.png
+Screenshot example/chatinput/screenshots/14-clear-state.png
 
 # Exit the application
 Ctrl+C

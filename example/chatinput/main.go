@@ -89,6 +89,7 @@ func newModel() model {
 		{Key: "Esc", Desc: "Clear/Close"},
 		{Key: "Tab", Desc: "Focus hints"},
 		{Key: "1-7", Desc: "Theme"},
+		{Key: "H", Desc: "Cycle help mode"},
 		{Key: "?", Desc: "Help"},
 		{Key: "Ctrl+C", Desc: "Quit"},
 	}
@@ -156,15 +157,21 @@ func (m model) switchTheme(name string) model {
 		{Key: "Esc", Desc: "Clear/Close"},
 		{Key: "Tab", Desc: "Focus hints"},
 		{Key: "1-7", Desc: "Theme"},
+		{Key: "H", Desc: "Cycle help mode"},
 		{Key: "?", Desc: "Help"},
 		{Key: "Ctrl+C", Desc: "Quit"},
+	}
+	// Calculate input width for consistency
+	inputWidth := m.width - 2
+	if inputWidth < 20 {
+		inputWidth = 20
 	}
 	m.hints = keyhints.New(bindings,
 		keyhints.WithPalette(p),
 		keyhints.WithDefaultVisible(5),
 		keyhints.WithCollapsed(),
 		keyhints.WithSeparator(" | "),
-		keyhints.WithWidth(m.width),
+		keyhints.WithWidth(inputWidth), // Match ChatInput width for border alignment
 	)
 
 	return m
@@ -186,7 +193,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			inputWidth = 20
 		}
 		m.input.SetWidth(inputWidth)
-		m.hints.SetWidth(msg.Width)
+		m.hints.SetWidth(inputWidth) // Match ChatInput width for border alignment
 		return m, nil
 
 	case tea.KeyMsg:
@@ -222,6 +229,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.Focus()
 				return m, nil
 			}
+		case "H":
+			// Only cycle help modes when keyhints is focused or help is showing
+			if m.hints.Focused() || m.hints.ShowingHelp() {
+				// Cycle through help modes: Down -> Up -> Top -> Center -> Down
+				modes := []keyhints.HelpMode{
+					keyhints.HelpModeDown,
+					keyhints.HelpModeUp,
+					keyhints.HelpModeTop,
+					keyhints.HelpModeCenter,
+				}
+				current := m.hints.HelpMode()
+				nextIdx := 0
+				for i, mode := range modes {
+					if mode == current {
+						nextIdx = (i + 1) % len(modes)
+						break
+					}
+				}
+				m.hints.SetHelpMode(modes[nextIdx])
+				modeNames := map[keyhints.HelpMode]string{
+					keyhints.HelpModeDown:   "Down",
+					keyhints.HelpModeUp:     "Up",
+					keyhints.HelpModeTop:    "Top",
+					keyhints.HelpModeCenter: "Center",
+				}
+				m.flashMsg = fmt.Sprintf("Help mode: %s", modeNames[modes[nextIdx]])
+				return m, nil
+			}
 		}
 
 	case chatinput.SubmitMsg:
@@ -253,12 +288,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	var sb strings.Builder
 
+	// Map help modes to display names
+	modeNames := map[keyhints.HelpMode]string{
+		keyhints.HelpModeDown:   "Down",
+		keyhints.HelpModeUp:     "Up",
+		keyhints.HelpModeTop:    "Top",
+		keyhints.HelpModeCenter: "Center",
+	}
+
 	// Header with theme indicator and description
 	titleStyle := lipgloss.NewStyle().Bold(true)
 	sb.WriteString(titleStyle.Render("ChatInput Theme Demo"))
 	sb.WriteString(" - Theme: ")
 	themeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 	sb.WriteString(themeStyle.Render(m.themeName))
+	sb.WriteString(" - Help Mode: ")
+	modeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
+	sb.WriteString(modeStyle.Render(modeNames[m.hints.HelpMode()]))
 	sb.WriteString("\n")
 
 	// Show current theme description
@@ -270,9 +316,9 @@ func (m model) View() string {
 	sb.WriteString("\nThemes: ")
 	for i, name := range m.themeList {
 		if name == m.themeName {
-			sb.WriteString(fmt.Sprintf("[%d:%s] ", i+1, name))
+			fmt.Fprintf(&sb, "[%d:%s] ", i+1, name)
 		} else {
-			sb.WriteString(fmt.Sprintf("%d:%s ", i+1, name))
+			fmt.Fprintf(&sb, "%d:%s ", i+1, name)
 		}
 	}
 	sb.WriteString("\n")
@@ -290,19 +336,37 @@ func (m model) View() string {
 		sb.WriteString("Submitted:\n")
 		for i, msg := range m.messages {
 			display := strings.ReplaceAll(msg, "\n", "\\n")
-			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, display))
+			fmt.Fprintf(&sb, "  %d. %s\n", i+1, display)
 		}
 		sb.WriteString("\n")
 	}
 
-	// Display the input
-	sb.WriteString(m.input.View())
-	sb.WriteString("\n\n")
-
-	// Display keyhints or help window
+	// Display input and keyhints/help based on mode
 	if m.hints.ShowingHelp() {
-		sb.WriteString(m.hints.ViewHelp())
+		switch m.hints.HelpMode() {
+		case keyhints.HelpModeUp:
+			// Help above input
+			sb.WriteString(m.hints.ViewHelp())
+			sb.WriteString("\n")
+			sb.WriteString(m.input.View())
+		case keyhints.HelpModeTop:
+			// Help at very top (already at top, same as Up but semantic)
+			sb.WriteString(m.hints.ViewHelp())
+			sb.WriteString("\n\n")
+			sb.WriteString(m.input.View())
+		case keyhints.HelpModeCenter:
+			// Centered overlay (render after input)
+			sb.WriteString(m.input.View())
+			sb.WriteString("\n\n")
+			sb.WriteString(m.hints.ViewHelp())
+		default: // HelpModeDown
+			sb.WriteString(m.input.View())
+			sb.WriteString("\n\n")
+			sb.WriteString(m.hints.ViewHelp())
+		}
 	} else {
+		sb.WriteString(m.input.View())
+		sb.WriteString("\n\n")
 		sb.WriteString(m.hints.View())
 	}
 	sb.WriteString("\n")

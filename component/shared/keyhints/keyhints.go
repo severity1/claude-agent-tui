@@ -25,10 +25,6 @@ const DefaultVisibleCount = 3
 // Empty by default since the left border provides visual separation.
 const DefaultPadding = ""
 
-// borderWidth accounts for the left border character and internal padding
-// used in View() width calculations.
-const borderWidth = 2
-
 // HelpMode defines how the help window expands when toggled.
 type HelpMode int
 
@@ -62,6 +58,20 @@ type Model struct {
 
 	// Help window configuration
 	helpMode HelpMode // how the help window expands
+
+	// Inline bar styling (matches ChatInput pattern)
+	borderStyle         lipgloss.Border // border style (default: ThickBorder)
+	borderLeft          bool            // show left border (default: false - space reserved but invisible)
+	borderRight         bool            // show right border (default: true)
+	borderPaddingTop    int             // top padding
+	borderPaddingBottom int             // bottom padding
+	borderPaddingLeft   int             // left padding (default: 1)
+	borderPaddingRight  int             // right padding
+
+	// Centered window styling (separate config)
+	centerBorderStyle lipgloss.Border // border style (default: RoundedBorder)
+	centerBorderFull  bool            // all 4 borders (default: true)
+	centerPadding     int             // uniform padding (default: 1)
 }
 
 // Option configures the Model.
@@ -87,6 +97,20 @@ func New(bindings []Binding, opts ...Option) Model {
 		primaryColor:   defaults.PrimaryColor,
 		contentBg:      defaults.ContentBg,
 		helpMode:       HelpModeDown, // default: expand downward
+
+		// Inline bar defaults
+		borderStyle:         lipgloss.ThickBorder(),
+		borderLeft:          true,  // visible left border
+		borderRight:         false, // invisible but space reserved
+		borderPaddingTop:    0,
+		borderPaddingBottom: 0,
+		borderPaddingLeft:   1,
+		borderPaddingRight:  0,
+
+		// Centered window defaults
+		centerBorderStyle: lipgloss.NormalBorder(),
+		centerBorderFull:  true, // all 4 borders for floating modal
+		centerPadding:     1,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -184,6 +208,68 @@ func WithContentBackground(color lipgloss.TerminalColor) Option {
 func WithPadding(padding string) Option {
 	return func(m *Model) {
 		m.padding = padding
+	}
+}
+
+// WithBorderStyle sets the border style for the inline bar and attached help modes.
+// Default is lipgloss.ThickBorder().
+func WithBorderStyle(style lipgloss.Border) Option {
+	return func(m *Model) {
+		m.borderStyle = style
+	}
+}
+
+// WithBorderLeft enables or disables the left border visibility.
+// When false, the border space is still reserved but the border character is invisible (space).
+// Default is true (visible).
+func WithBorderLeft(enabled bool) Option {
+	return func(m *Model) {
+		m.borderLeft = enabled
+	}
+}
+
+// WithBorderRight enables or disables the right border visibility.
+// When false, the border space is still reserved but the border character is invisible (space).
+// Default is false (invisible but space reserved).
+func WithBorderRight(enabled bool) Option {
+	return func(m *Model) {
+		m.borderRight = enabled
+	}
+}
+
+// WithBorderPadding sets the padding inside the border for inline and attached modes.
+// Default is (0, 0, 1, 0) for top, bottom, left, right.
+func WithBorderPadding(top, bottom, left, right int) Option {
+	return func(m *Model) {
+		m.borderPaddingTop = top
+		m.borderPaddingBottom = bottom
+		m.borderPaddingLeft = left
+		m.borderPaddingRight = right
+	}
+}
+
+// WithCenterBorderStyle sets the border style for the centered help window.
+// Default is lipgloss.RoundedBorder().
+func WithCenterBorderStyle(style lipgloss.Border) Option {
+	return func(m *Model) {
+		m.centerBorderStyle = style
+	}
+}
+
+// WithCenterBorderFull enables or disables all 4 borders for the centered window.
+// When true, shows all borders; when false, shows only left border like attached modes.
+// Default is true for floating modal appearance.
+func WithCenterBorderFull(enabled bool) Option {
+	return func(m *Model) {
+		m.centerBorderFull = enabled
+	}
+}
+
+// WithCenterPadding sets the uniform padding for the centered help window.
+// Default is 1.
+func WithCenterPadding(n int) Option {
+	return func(m *Model) {
+		m.centerPadding = n
 	}
 }
 
@@ -307,6 +393,11 @@ func (m Model) HelpMode() HelpMode {
 	return m.helpMode
 }
 
+// SetHelpMode sets how the help window expands for runtime mode changes.
+func (m *Model) SetHelpMode(mode HelpMode) {
+	m.helpMode = mode
+}
+
 // HelpHeight returns the line count of the help window for parent layout calculations.
 // Returns 0 if there are no bindings.
 func (m Model) HelpHeight() int {
@@ -342,6 +433,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// modifyBorderVisibility returns a copy of the border with invisible characters
+// for hidden sides. This allows space reservation while hiding the border visually.
+func modifyBorderVisibility(border lipgloss.Border, showLeft, showRight bool) lipgloss.Border {
+	result := border
+	if !showLeft {
+		result.Left = " "
+		result.MiddleLeft = " "
+	}
+	if !showRight {
+		result.Right = " "
+		result.MiddleRight = " "
+	}
+	return result
+}
+
 // View implements tea.Model - renders keybindings as inline hints.
 // When collapsed, shows only defaultVisible bindings with a "? more" indicator.
 // When width is set, truncates to fit within width with a "+N more" indicator.
@@ -365,10 +471,10 @@ func (m Model) View() string {
 
 	// Build parts, respecting width constraint if set
 	var parts []string
-	currentWidth := 0
 
-	// Account for border width (1 character + border padding)
-	currentWidth = borderWidth
+	// Always reserve space for both borders (space characters when invisible)
+	bw := 2
+	currentWidth := bw + m.borderPaddingLeft + m.borderPaddingRight
 
 	for i, b := range bindings {
 		key := m.keyStyle.Render(b.Key)
@@ -415,23 +521,32 @@ func (m Model) View() string {
 	// Apply left padding
 	result = m.padding + result
 
-	// Wrap with left border - use focusStyle color when focused, borderColor when unfocused
+	// Wrap with borders - use focusStyle color when focused, borderColor when unfocused
 	currentBorderColor := m.borderColor
 	if m.focused {
 		currentBorderColor = m.focusStyle.GetForeground()
 	}
-	borderStyle := lipgloss.NewStyle().
+
+	// Modify border style for visibility (always reserve space, but use space chars when hidden)
+	borderStyle := modifyBorderVisibility(m.borderStyle, m.borderLeft, m.borderRight)
+
+	style := lipgloss.NewStyle().
 		BorderLeft(true).
-		BorderStyle(lipgloss.ThickBorder()).
+		BorderRight(true).
+		BorderStyle(borderStyle).
 		BorderForeground(currentBorderColor).
-		PaddingLeft(1)
+		PaddingTop(m.borderPaddingTop).
+		PaddingBottom(m.borderPaddingBottom).
+		PaddingLeft(m.borderPaddingLeft).
+		PaddingRight(m.borderPaddingRight)
 
 	// Apply width for consistent full-width rendering (like ChatInput)
+	// bw was already calculated at the start of View()
 	if m.width > 0 {
-		borderStyle = borderStyle.Width(m.width - borderWidth)
+		style = style.Width(m.width - bw)
 	}
 
-	return borderStyle.Render(result)
+	return style.Render(result)
 }
 
 // ViewCompact renders a more compact version with just keys.
@@ -489,27 +604,81 @@ func (m Model) ViewHelp() string {
 	return m.renderHelpContent(sb.String(), m.width)
 }
 
-// renderHelpContent wraps content with left border styling for the help window.
-// Width is applied for non-Center modes to match the keyhints bar width.
+// renderHelpContent wraps content with border styling for the help window.
+// Centered mode uses center-specific config; attached modes inherit inline config.
 func (m Model) renderHelpContent(content string, width int) string {
 	// Use focusStyle color for border (help window is always "active" when shown)
 	borderColor := m.focusStyle.GetForeground()
 
+	if m.helpMode == HelpModeCenter {
+		// Centered: use center-specific config for floating modal appearance
+		style := lipgloss.NewStyle().
+			Border(m.centerBorderStyle, m.centerBorderFull).
+			BorderForeground(borderColor).
+			Padding(m.centerPadding)
+
+		// Apply background color to border/padding areas
+		if m.contentBg != nil {
+			style = style.Background(m.contentBg)
+		}
+
+		result := style.Render(content)
+
+		// Use Place() with WhitespaceBackground for consistent background fill
+		if m.contentBg != nil {
+			result = lipgloss.Place(
+				lipgloss.Width(result),
+				lipgloss.Height(result),
+				lipgloss.Left,
+				lipgloss.Top,
+				result,
+				lipgloss.WithWhitespaceBackground(m.contentBg),
+			)
+		}
+
+		return result
+	}
+
+	// Attached modes (Down/Up/Top): inherit inline config
+	// Modify border style for visibility (always reserve space, but use space chars when hidden)
+	borderStyle := modifyBorderVisibility(m.borderStyle, m.borderLeft, m.borderRight)
+
 	style := lipgloss.NewStyle().
 		BorderLeft(true).
-		BorderStyle(lipgloss.ThickBorder()).
+		BorderRight(true).
+		BorderStyle(borderStyle).
 		BorderForeground(borderColor).
-		PaddingLeft(1)
+		PaddingTop(m.borderPaddingTop).
+		PaddingBottom(m.borderPaddingBottom).
+		PaddingLeft(m.borderPaddingLeft).
+		PaddingRight(m.borderPaddingRight)
 
-	// Apply background color if set
+	// Apply background color to border/padding areas
 	if m.contentBg != nil {
 		style = style.Background(m.contentBg)
 	}
 
-	// Apply width for non-Center modes to match keyhints bar width
-	if m.helpMode != HelpModeCenter && width > 0 {
-		style = style.Width(width - borderWidth)
+	// Always reserve space for both borders (space characters when invisible)
+	bw := 2
+
+	// Apply width for consistent full-width rendering
+	if width > 0 {
+		style = style.Width(width - bw)
 	}
 
-	return style.Render(content)
+	result := style.Render(content)
+
+	// Use Place() with WhitespaceBackground for consistent background fill
+	if m.contentBg != nil {
+		result = lipgloss.Place(
+			lipgloss.Width(result),
+			lipgloss.Height(result),
+			lipgloss.Left,
+			lipgloss.Top,
+			result,
+			lipgloss.WithWhitespaceBackground(m.contentBg),
+		)
+	}
+
+	return result
 }
