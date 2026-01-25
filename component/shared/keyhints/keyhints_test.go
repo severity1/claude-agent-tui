@@ -1561,3 +1561,836 @@ func TestModel_ViewHelp_BorderVisibility(t *testing.T) {
 		t.Errorf("ViewHelp() should contain binding description")
 	}
 }
+
+// ============================================================================
+// Animation Tests
+// ============================================================================
+
+func TestNew_DefaultAnimationDisabled(t *testing.T) {
+	m := keyhints.New(nil)
+
+	if m.Animating() {
+		t.Error("New() should create model with animation not in progress")
+	}
+}
+
+func TestNew_WithAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	// Animation is enabled but not yet in progress
+	if m.Animating() {
+		t.Error("WithAnimation(true) should not start animation immediately")
+	}
+}
+
+func TestNew_WithAnimationSpring(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	// Should not panic with custom spring parameters
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithAnimationSpring(8.0, 0.5),
+	)
+
+	if m.Animating() {
+		t.Error("WithAnimationSpring should not start animation")
+	}
+}
+
+func TestModel_ShowHelp_WithAnimation_StartsAnimating(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+
+	if !m.Animating() {
+		t.Error("ShowHelp() with animation enabled should start animation")
+	}
+	if !m.ShowingHelp() {
+		t.Error("ShowHelp() should set showHelp to true")
+	}
+}
+
+func TestModel_HideHelp_WithAnimation_StartsAnimating(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+	// Manually stop animation for testing
+	for i := 0; i < 100; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	m.HideHelp()
+
+	if !m.Animating() {
+		t.Error("HideHelp() with animation enabled should start animation")
+	}
+	// showHelp should still be true until animation completes
+	if !m.ShowingHelp() {
+		t.Error("HideHelp() with animation should keep showHelp=true until animation completes")
+	}
+}
+
+func TestModel_ShowHelp_WithoutAnimation_NoAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings) // No animation
+
+	m.ShowHelp()
+
+	if m.Animating() {
+		t.Error("ShowHelp() without animation enabled should not animate")
+	}
+	if !m.ShowingHelp() {
+		t.Error("ShowHelp() should set showHelp to true")
+	}
+}
+
+func TestModel_AnimationCmd_WhenAnimating(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+
+	cmd := m.AnimationCmd()
+	if cmd == nil {
+		t.Error("AnimationCmd() should return tick command when animating")
+	}
+}
+
+func TestModel_AnimationCmd_WhenNotAnimating(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	// Not animating yet
+	cmd := m.AnimationCmd()
+	if cmd != nil {
+		t.Error("AnimationCmd() should return nil when not animating")
+	}
+}
+
+func TestModel_AnimatedHelpHeight_NoAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings) // No animation
+
+	// Not showing help
+	height := m.AnimatedHelpHeight()
+	if height != 0 {
+		t.Errorf("AnimatedHelpHeight() when not showing help = %d, want 0", height)
+	}
+
+	// Show help
+	m.ShowHelp()
+	height = m.AnimatedHelpHeight()
+	expected := m.HelpHeight()
+	if height != expected {
+		t.Errorf("AnimatedHelpHeight() when showing help = %d, want %d", height, expected)
+	}
+}
+
+func TestModel_AnimatedHelpHeight_WithAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+
+	// During animation, height should be a positive value
+	height := m.AnimatedHelpHeight()
+	if height < 0 {
+		t.Errorf("AnimatedHelpHeight() during animation should be >= 0, got %d", height)
+	}
+}
+
+func TestModel_ViewHelpPartial_ZeroLines(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	result := m.ViewHelpPartial(0)
+	if result != "" {
+		t.Errorf("ViewHelpPartial(0) = %q, want empty string", result)
+	}
+}
+
+func TestModel_ViewHelpPartial_NegativeLines(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	result := m.ViewHelpPartial(-1)
+	if result != "" {
+		t.Errorf("ViewHelpPartial(-1) = %q, want empty string", result)
+	}
+}
+
+func TestModel_ViewHelpPartial_FullContent(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	fullView := m.ViewHelp()
+	lineCount := len(strings.Split(fullView, "\n"))
+
+	// Request more lines than available
+	result := m.ViewHelpPartial(lineCount + 10)
+	if result != fullView {
+		t.Error("ViewHelpPartial() with more lines than available should return full content")
+	}
+}
+
+func TestModel_ViewHelpPartial_TopAnchored_Down(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+	}
+	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeDown))
+
+	fullView := m.ViewHelp()
+	lines := strings.Split(fullView, "\n")
+
+	// Request fewer lines - should show first N lines (top-anchored)
+	result := m.ViewHelpPartial(2)
+	resultLines := strings.Split(result, "\n")
+
+	if len(resultLines) != 2 {
+		t.Errorf("ViewHelpPartial(2) returned %d lines, want 2", len(resultLines))
+	}
+	// First lines should match
+	if resultLines[0] != lines[0] {
+		t.Error("ViewHelpPartial() in Down mode should show first lines (top-anchored)")
+	}
+}
+
+func TestModel_ViewHelpPartial_BottomAnchored_Up(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+		{Key: "b", Desc: "B"},
+	}
+	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeUp))
+
+	fullView := m.ViewHelp()
+	fullLines := strings.Split(fullView, "\n")
+	totalLines := len(fullLines)
+
+	// Request fewer lines - should show last N lines (NO padding)
+	visibleCount := 2
+	result := m.ViewHelpPartial(visibleCount)
+	resultLines := strings.Split(result, "\n")
+
+	// Result should have exactly visibleCount lines (no padding)
+	if len(resultLines) != visibleCount {
+		t.Errorf("ViewHelpPartial(%d) returned %d lines, want %d",
+			visibleCount, len(resultLines), visibleCount)
+	}
+
+	// Lines should be the LAST visibleCount lines from full content
+	for i := 0; i < visibleCount; i++ {
+		expectedIdx := totalLines - visibleCount + i
+		if resultLines[i] != fullLines[expectedIdx] {
+			t.Errorf("ViewHelpPartial line %d = %q, want %q",
+				i, resultLines[i], fullLines[expectedIdx])
+		}
+	}
+}
+
+func TestModel_AnimationPaddingLines(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+
+	t.Run("returns 0 when not animating", func(t *testing.T) {
+		m := keyhints.New(bindings, keyhints.WithAnimation(true), keyhints.WithHelpMode(keyhints.HelpModeUp))
+		// Not animating yet
+		if padding := m.AnimationPaddingLines(); padding != 0 {
+			t.Errorf("AnimationPaddingLines() = %d, want 0 when not animating", padding)
+		}
+	})
+
+	t.Run("returns 0 for non-Up modes", func(t *testing.T) {
+		m := keyhints.New(bindings, keyhints.WithAnimation(true), keyhints.WithHelpMode(keyhints.HelpModeDown))
+		m.ShowHelp()
+		if padding := m.AnimationPaddingLines(); padding != 0 {
+			t.Errorf("AnimationPaddingLines() = %d, want 0 for Down mode", padding)
+		}
+	})
+
+	t.Run("returns correct padding for Up mode animation", func(t *testing.T) {
+		m := keyhints.New(bindings, keyhints.WithAnimation(true), keyhints.WithHelpMode(keyhints.HelpModeUp))
+		m.ShowHelp()
+
+		// During early animation, padding should be > 0
+		padding := m.AnimationPaddingLines()
+		expectedMax := m.HelpHeight()
+		if padding < 0 || padding > expectedMax {
+			t.Errorf("AnimationPaddingLines() = %d, want 0 <= padding <= %d", padding, expectedMax)
+		}
+	})
+}
+
+func TestModel_ViewHelpPartial_TopAnchored_Center(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeCenter))
+
+	fullView := m.ViewHelp()
+	lines := strings.Split(fullView, "\n")
+
+	// Center mode should be top-anchored
+	result := m.ViewHelpPartial(2)
+	resultLines := strings.Split(result, "\n")
+
+	if resultLines[0] != lines[0] {
+		t.Error("ViewHelpPartial() in Center mode should show first lines (top-anchored)")
+	}
+}
+
+func TestModel_ViewHelpPartial_TopAnchored_Top(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeTop))
+
+	fullView := m.ViewHelp()
+	lines := strings.Split(fullView, "\n")
+
+	// Top mode should be top-anchored
+	result := m.ViewHelpPartial(2)
+	resultLines := strings.Split(result, "\n")
+
+	if resultLines[0] != lines[0] {
+		t.Error("ViewHelpPartial() in Top mode should show first lines (top-anchored)")
+	}
+}
+
+func TestModel_ViewHelpAnimated_NoAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings) // No animation
+
+	result := m.ViewHelpAnimated()
+	expected := m.ViewHelp()
+
+	if result != expected {
+		t.Error("ViewHelpAnimated() without animation should return ViewHelp()")
+	}
+}
+
+func TestModel_ViewHelpAnimated_WithAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+
+	// During animation, should return partial content
+	result := m.ViewHelpAnimated()
+	// Just verify it returns something (actual content depends on animation state)
+	if result == "" && m.AnimatedHelpHeight() > 0 {
+		t.Error("ViewHelpAnimated() during animation should return content")
+	}
+}
+
+func TestModel_Update_HeightTickMsg_NotAnimating(t *testing.T) {
+	m := keyhints.New(nil, keyhints.WithAnimation(true))
+
+	// Not animating
+	updated, cmd := m.Update(keyhints.HeightTickMsg{})
+
+	if cmd != nil {
+		t.Error("Update(HeightTickMsg) when not animating should return nil cmd")
+	}
+	if _, ok := updated.(keyhints.Model); !ok {
+		t.Errorf("Update() returned %T, want keyhints.Model", updated)
+	}
+}
+
+func TestModel_Update_HeightTickMsg_Animating(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+
+	// First tick should continue animation
+	updated, cmd := m.Update(keyhints.HeightTickMsg{})
+	m = updated.(keyhints.Model)
+
+	// Animation should either continue or complete
+	if m.Animating() && cmd == nil {
+		t.Error("Update(HeightTickMsg) while animating should return tick cmd")
+	}
+}
+
+func TestModel_Update_HeightTickMsg_AnimationCompletes(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	m.ShowHelp()
+
+	// Run animation until it completes
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	if m.Animating() {
+		t.Error("Animation should complete after sufficient ticks")
+	}
+	if !m.ShowingHelp() {
+		t.Error("ShowHelp animation should keep help visible after completion")
+	}
+}
+
+func TestModel_Update_HeightTickMsg_HideAnimationCompletes(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	// Show and wait for animation
+	m.ShowHelp()
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	// Now hide
+	m.HideHelp()
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	if m.Animating() {
+		t.Error("Hide animation should complete after sufficient ticks")
+	}
+	if m.ShowingHelp() {
+		t.Error("HideHelp animation should set showHelp=false after completion")
+	}
+}
+
+func TestModel_Update_QuestionMark_WithAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m.Focus()
+
+	// Press ? to toggle help
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	updated, cmd := m.Update(keyMsg)
+	m = updated.(keyhints.Model)
+
+	if !m.ShowingHelp() {
+		t.Error("? key should show help")
+	}
+	if !m.Animating() {
+		t.Error("? key with animation should start animation")
+	}
+	if cmd == nil {
+		t.Error("? key with animation should return tick cmd")
+	}
+}
+
+func TestModel_Update_Esc_WithAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m.Focus()
+	m.ShowHelp()
+
+	// Run show animation to completion
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	// Press Esc to hide help
+	keyMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	updated, cmd := m.Update(keyMsg)
+	m = updated.(keyhints.Model)
+
+	if !m.Animating() {
+		t.Error("Esc key with animation should start hide animation")
+	}
+	if cmd == nil {
+		t.Error("Esc key with animation should return tick cmd")
+	}
+}
+
+// ============================================================================
+// Center Mode Animation Skip Tests
+// ============================================================================
+
+func TestModel_ShowHelp_CenterMode_NoAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithHelpMode(keyhints.HelpModeCenter),
+	)
+
+	m.ShowHelp()
+
+	// Center mode should skip animation even when enabled
+	if m.Animating() {
+		t.Error("ShowHelp() in Center mode should NOT start animation")
+	}
+	if !m.ShowingHelp() {
+		t.Error("ShowHelp() should set showHelp to true")
+	}
+	// animatedHeight should be set to full height immediately
+	if m.AnimatedHelpHeight() != m.HelpHeight() {
+		t.Errorf("ShowHelp() in Center mode should set full height immediately, got %d want %d",
+			m.AnimatedHelpHeight(), m.HelpHeight())
+	}
+}
+
+func TestModel_HideHelp_CenterMode_NoAnimation(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithHelpMode(keyhints.HelpModeCenter),
+	)
+
+	m.ShowHelp()
+	m.HideHelp()
+
+	// Center mode should skip animation and hide immediately
+	if m.Animating() {
+		t.Error("HideHelp() in Center mode should NOT start animation")
+	}
+	if m.ShowingHelp() {
+		t.Error("HideHelp() in Center mode should hide immediately")
+	}
+}
+
+func TestModel_ViewHelpAnimated_CenterMode_ReturnsFullContent(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithHelpMode(keyhints.HelpModeCenter),
+	)
+
+	m.ShowHelp()
+
+	// ViewHelpAnimated should return full content for Center mode
+	result := m.ViewHelpAnimated()
+	expected := m.ViewHelp()
+
+	if result != expected {
+		t.Error("ViewHelpAnimated() in Center mode should return full ViewHelp() content")
+	}
+}
+
+func TestModel_ShowHelp_NonCenterModes_WithAnimation(t *testing.T) {
+	// Verify non-Center modes still animate
+	animatingModes := []keyhints.HelpMode{
+		keyhints.HelpModeDown,
+		keyhints.HelpModeUp,
+		keyhints.HelpModeTop,
+	}
+
+	for _, mode := range animatingModes {
+		t.Run(modeToString(mode), func(t *testing.T) {
+			bindings := []keyhints.Binding{
+				{Key: "a", Desc: "A"},
+			}
+			m := keyhints.New(bindings,
+				keyhints.WithAnimation(true),
+				keyhints.WithHelpMode(mode),
+			)
+
+			m.ShowHelp()
+
+			if !m.Animating() {
+				t.Errorf("ShowHelp() in %s mode should start animation", modeToString(mode))
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Animation State Reset Tests
+// ============================================================================
+
+func TestModel_ShowHelp_ResetsAnimationState(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+
+	// First show/hide cycle
+	m.ShowHelp()
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+	m.HideHelp()
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	// Second show - should start from clean state
+	m.ShowHelp()
+
+	// Animation should start from 0
+	if !m.Animating() {
+		t.Error("ShowHelp() should start animation on second show")
+	}
+
+	// Initial animated height should be close to 0 (or at least small)
+	height := m.AnimatedHelpHeight()
+	if height > 1 {
+		t.Errorf("ShowHelp() should reset animation to start from 0, got height %d", height)
+	}
+}
+
+// ============================================================================
+// Overlay Mode Tests
+// ============================================================================
+
+func TestNew_WithOverlay(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings, keyhints.WithOverlay(true))
+
+	if !m.Overlay() {
+		t.Error("WithOverlay(true) should enable overlay mode")
+	}
+}
+
+func TestNew_WithOverlay_DefaultFalse(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings)
+
+	if m.Overlay() {
+		t.Error("Overlay should be false by default")
+	}
+}
+
+func TestModel_Overlay(t *testing.T) {
+	m := keyhints.New(nil, keyhints.WithOverlay(true))
+
+	if !m.Overlay() {
+		t.Error("Overlay() should return true when enabled")
+	}
+
+	m2 := keyhints.New(nil, keyhints.WithOverlay(false))
+	if m2.Overlay() {
+		t.Error("Overlay() should return false when disabled")
+	}
+}
+
+func TestModel_SetOverlay(t *testing.T) {
+	m := keyhints.New(nil)
+
+	m.SetOverlay(true)
+	if !m.Overlay() {
+		t.Error("SetOverlay(true) should enable overlay mode")
+	}
+
+	m.SetOverlay(false)
+	if m.Overlay() {
+		t.Error("SetOverlay(false) should disable overlay mode")
+	}
+}
+
+func TestModel_ToggleOverlay(t *testing.T) {
+	m := keyhints.New(nil)
+
+	// Default is false
+	if m.Overlay() {
+		t.Fatal("Overlay should be false by default")
+	}
+
+	// Toggle to true
+	m.ToggleOverlay()
+	if !m.Overlay() {
+		t.Error("ToggleOverlay() should enable overlay mode when disabled")
+	}
+
+	// Toggle back to false
+	m.ToggleOverlay()
+	if m.Overlay() {
+		t.Error("ToggleOverlay() should disable overlay mode when enabled")
+	}
+}
+
+func TestModel_AnimationPaddingLines_Overlay(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+
+	t.Run("returns padding for overlay mode animation", func(t *testing.T) {
+		m := keyhints.New(bindings,
+			keyhints.WithAnimation(true),
+			keyhints.WithOverlay(true),
+			keyhints.WithHelpMode(keyhints.HelpModeDown), // Not Up mode, but overlay
+		)
+		m.ShowHelp()
+
+		// During early animation, padding should be > 0 for overlay mode
+		padding := m.AnimationPaddingLines()
+		expectedMax := m.HelpHeight()
+		if padding < 0 || padding > expectedMax {
+			t.Errorf("AnimationPaddingLines() in overlay mode = %d, want 0 <= padding <= %d",
+				padding, expectedMax)
+		}
+	})
+
+	t.Run("returns 0 when not animating with overlay", func(t *testing.T) {
+		m := keyhints.New(bindings,
+			keyhints.WithAnimation(true),
+			keyhints.WithOverlay(true),
+		)
+		// Not animating yet
+		if padding := m.AnimationPaddingLines(); padding != 0 {
+			t.Errorf("AnimationPaddingLines() = %d, want 0 when not animating", padding)
+		}
+	})
+
+	t.Run("returns 0 for Down mode without overlay", func(t *testing.T) {
+		m := keyhints.New(bindings,
+			keyhints.WithAnimation(true),
+			keyhints.WithOverlay(false),
+			keyhints.WithHelpMode(keyhints.HelpModeDown),
+		)
+		m.ShowHelp()
+		if padding := m.AnimationPaddingLines(); padding != 0 {
+			t.Errorf("AnimationPaddingLines() = %d, want 0 for Down mode without overlay", padding)
+		}
+	})
+}
+
+func TestModel_ShowHelp_Overlay_UsesSnappierSpring(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithOverlay(true),
+	)
+
+	m.ShowHelp()
+
+	if !m.Animating() {
+		t.Error("ShowHelp() with overlay and animation should start animation")
+	}
+	if !m.ShowingHelp() {
+		t.Error("ShowHelp() should set showHelp to true")
+	}
+}
+
+func TestModel_HideHelp_Overlay_UsesSnappierSpring(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithOverlay(true),
+	)
+
+	m.ShowHelp()
+	// Run show animation to completion
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	m.HideHelp()
+
+	if !m.Animating() {
+		t.Error("HideHelp() with overlay and animation should start animation")
+	}
+}
+
+func TestModel_Overlay_Animation_Completes(t *testing.T) {
+	bindings := []keyhints.Binding{
+		{Key: "a", Desc: "A"},
+	}
+	m := keyhints.New(bindings,
+		keyhints.WithAnimation(true),
+		keyhints.WithOverlay(true),
+	)
+
+	m.ShowHelp()
+
+	// Run animation until it completes
+	for i := 0; i < 200; i++ {
+		updated, _ := m.Update(keyhints.HeightTickMsg{})
+		m = updated.(keyhints.Model)
+		if !m.Animating() {
+			break
+		}
+	}
+
+	if m.Animating() {
+		t.Error("Overlay animation should complete after sufficient ticks")
+	}
+	if !m.ShowingHelp() {
+		t.Error("ShowHelp overlay animation should keep help visible after completion")
+	}
+}

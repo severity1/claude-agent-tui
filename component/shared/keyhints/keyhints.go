@@ -3,10 +3,14 @@ package keyhints
 
 import (
 	"fmt"
+	"math"
+	"os"
 	"slices"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/severity1/claude-agent-tui/theme"
@@ -35,21 +39,37 @@ const (
 	HelpModeTop                    // Expands from top
 )
 
+// HeightTickMsg triggers animation frame updates for help window expansion.
+type HeightTickMsg struct{}
+
+// heightTick returns a command that sends HeightTickMsg at 60 FPS.
+func heightTick() tea.Cmd {
+	return tea.Tick(time.Second/60, func(time.Time) tea.Msg {
+		return HeightTickMsg{}
+	})
+}
+
+// reduceMotion returns true if the REDUCE_MOTION environment variable is set.
+func reduceMotion() bool {
+	return os.Getenv("REDUCE_MOTION") != ""
+}
+
 // Model represents the keyhints component state.
 type Model struct {
-	bindings       []Binding
-	separator      string
-	keyStyle       lipgloss.Style
-	descStyle      lipgloss.Style
-	sepStyle       lipgloss.Style
-	focusStyle     lipgloss.Style // style applied when focused
-	helpStyle      lipgloss.Style // style for the help window border
-	padding        string         // left padding for inline views
-	width          int
-	expanded       bool // whether all bindings are visible in inline view
-	defaultVisible int  // number of bindings to show when collapsed
-	focused        bool // whether the component has focus
-	showHelp       bool // whether to show the help window
+	bindings         []Binding
+	reservedBindings []Binding // bindings always shown at end of bar (e.g., "?", "Esc")
+	separator        string
+	keyStyle         lipgloss.Style
+	descStyle        lipgloss.Style
+	sepStyle         lipgloss.Style
+	focusStyle       lipgloss.Style // style applied when focused
+	helpStyle        lipgloss.Style // style for the help window border
+	padding          string         // left padding for inline views
+	width            int
+	expanded         bool // whether all bindings are visible in inline view
+	defaultVisible   int  // number of bindings to show when collapsed
+	focused          bool // whether the component has focus
+	showHelp         bool // whether to show the help window
 
 	// Colors for dynamic styling
 	borderColor  lipgloss.TerminalColor // border color when not focused
@@ -58,6 +78,15 @@ type Model struct {
 
 	// Help window configuration
 	helpMode HelpMode // how the help window expands
+
+	// Animation state fields
+	animationEnabled bool             // toggleable by users
+	animatedHeight   float64          // current animated height (lines)
+	heightVelocity   float64          // spring velocity
+	targetHeight     float64          // target height (0 or HelpHeight())
+	spring           harmonica.Spring // spring instance
+	animating        bool             // true while animation in progress
+	overlay          bool             // when true, help floats above content instead of pushing
 
 	// Inline bar styling (matches ChatInput pattern)
 	borderStyle         lipgloss.Border // border style (default: ThickBorder)
@@ -172,6 +201,16 @@ func WithDefaultVisible(n int) Option {
 func WithCollapsed() Option {
 	return func(m *Model) {
 		m.expanded = false
+	}
+}
+
+// WithReservedBindings sets bindings that are always shown at the end of the bar.
+// These bindings are displayed after the regular bindings and before the "+N more"
+// indicator, ensuring they are always visible regardless of width constraints.
+// Common use: reserved spots for "?" (help) and "Esc" (close/cancel).
+func WithReservedBindings(bindings ...Binding) Option {
+	return func(m *Model) {
+		m.reservedBindings = bindings
 	}
 }
 
@@ -312,6 +351,36 @@ func WithStyles(s Styles) Option {
 	}
 }
 
+// WithAnimation enables/disables physics animation for help window expansion.
+// Default is false (no animation). When enabled, respects REDUCE_MOTION env var.
+// Animation is skipped for HelpModeCenter (instant show/hide for floating modal).
+func WithAnimation(enabled bool) Option {
+	return func(m *Model) {
+		m.animationEnabled = enabled
+		if enabled {
+			m.spring = harmonica.NewSpring(harmonica.FPS(60), 12.0, 1.0)
+		}
+	}
+}
+
+// WithOverlay enables overlay mode where help floats above content.
+// When false (default), Down/Up/Top modes push content.
+// When true, they float like Center mode but at their respective positions.
+// Overlay mode uses a snappier animation for quicker show/hide.
+func WithOverlay(overlay bool) Option {
+	return func(m *Model) {
+		m.overlay = overlay
+	}
+}
+
+// WithAnimationSpring sets custom spring parameters (frequency, damping).
+// Only effective when animation is enabled.
+func WithAnimationSpring(frequency, damping float64) Option {
+	return func(m *Model) {
+		m.spring = harmonica.NewSpring(harmonica.FPS(60), frequency, damping)
+	}
+}
+
 // SetBindings replaces the current bindings.
 // The input slice is cloned to prevent external mutation.
 func (m *Model) SetBindings(bindings []Binding) {
@@ -369,18 +438,52 @@ func (m Model) Focused() bool {
 }
 
 // ShowHelp opens the help window.
+// When animation is enabled and REDUCE_MOTION is not set, starts animation.
+// Animation is skipped for HelpModeCenter (instant show for floating modal).
+// Overlay mode uses a snappier spring (frequency=18.0) for quicker animation.
 func (m *Model) ShowHelp() {
 	m.showHelp = true
+	if m.animationEnabled && !reduceMotion() && m.helpMode != HelpModeCenter {
+		// Use snappier spring for overlay mode
+		if m.overlay {
+			m.spring = harmonica.NewSpring(harmonica.FPS(60), 18.0, 1.0)
+		}
+		m.animatedHeight = 0
+		m.heightVelocity = 0
+		m.targetHeight = float64(m.HelpHeight())
+		m.animating = true
+	} else {
+		m.animatedHeight = float64(m.HelpHeight())
+	}
 }
 
 // HideHelp closes the help window.
+// When animation is enabled and REDUCE_MOTION is not set, starts animation.
+// Animation is skipped for HelpModeCenter (instant hide for floating modal).
+// Overlay mode uses a snappier spring (frequency=18.0) for quicker animation.
 func (m *Model) HideHelp() {
-	m.showHelp = false
+	if m.animationEnabled && !reduceMotion() && m.helpMode != HelpModeCenter {
+		// Use snappier spring for overlay mode
+		if m.overlay {
+			m.spring = harmonica.NewSpring(harmonica.FPS(60), 18.0, 1.0)
+		}
+		m.targetHeight = 0
+		m.animating = true
+		// Don't set showHelp = false yet; wait until animation completes
+	} else {
+		m.showHelp = false
+		m.animatedHeight = 0
+	}
 }
 
 // ToggleHelp toggles the help window visibility.
+// When animation is enabled and REDUCE_MOTION is not set, starts animation.
 func (m *Model) ToggleHelp() {
-	m.showHelp = !m.showHelp
+	if m.showHelp {
+		m.HideHelp()
+	} else {
+		m.ShowHelp()
+	}
 }
 
 // ShowingHelp returns whether the help window is visible.
@@ -396,6 +499,21 @@ func (m Model) HelpMode() HelpMode {
 // SetHelpMode sets how the help window expands for runtime mode changes.
 func (m *Model) SetHelpMode(mode HelpMode) {
 	m.helpMode = mode
+}
+
+// Overlay returns whether overlay mode is enabled.
+func (m Model) Overlay() bool {
+	return m.overlay
+}
+
+// SetOverlay enables or disables overlay mode.
+func (m *Model) SetOverlay(overlay bool) {
+	m.overlay = overlay
+}
+
+// ToggleOverlay toggles overlay mode on/off.
+func (m *Model) ToggleOverlay() {
+	m.overlay = !m.overlay
 }
 
 // HelpHeight returns the line count of the help window for parent layout calculations.
@@ -414,19 +532,49 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update implements tea.Model.
-// When focused, handles "?" key to toggle help window, Esc to close it.
+// Handles HeightTickMsg for animation, and when focused, handles "?" key to toggle help window, Esc to close it.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if !m.focused {
-		return m, nil
-	}
+	switch msg := msg.(type) {
+	case HeightTickMsg:
+		if !m.animating {
+			return m, nil
+		}
 
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "?":
-			m.showHelp = !m.showHelp
-		case "esc":
-			if m.showHelp {
+		// Update spring
+		m.animatedHeight, m.heightVelocity = m.spring.Update(
+			m.animatedHeight, m.heightVelocity, m.targetHeight,
+		)
+
+		// Check if settled (within threshold)
+		if math.Abs(m.animatedHeight-m.targetHeight) < 0.01 &&
+			math.Abs(m.heightVelocity) < 0.01 {
+			m.animatedHeight = m.targetHeight
+			m.animating = false
+			if m.targetHeight == 0 {
 				m.showHelp = false
+			}
+			return m, nil
+		}
+
+		return m, heightTick()
+
+	case tea.KeyMsg:
+		if !m.focused {
+			return m, nil
+		}
+		switch msg.String() {
+		case "?":
+			m.ToggleHelp()
+			// Start animation tick if animating
+			if m.animating {
+				return m, heightTick()
+			}
+		case "esc":
+			if m.showHelp || m.animating {
+				m.HideHelp()
+				if m.animating {
+					return m, heightTick()
+				}
 			}
 		}
 	}
@@ -448,12 +596,35 @@ func modifyBorderVisibility(border lipgloss.Border, showLeft, showRight bool) li
 	return result
 }
 
+// renderBinding formats a single binding as "Key: Desc".
+func (m Model) renderBinding(b Binding) string {
+	key := m.keyStyle.Render(b.Key)
+	desc := m.descStyle.Render(b.Desc)
+	return key + ": " + desc
+}
+
+// buildReservedParts calculates reserved bindings width and parts.
+func (m Model) buildReservedParts(sepWidth int) ([]string, int) {
+	var parts []string
+	totalWidth := 0
+	for _, b := range m.reservedBindings {
+		part := m.renderBinding(b)
+		parts = append(parts, part)
+		if totalWidth > 0 {
+			totalWidth += sepWidth
+		}
+		totalWidth += lipgloss.Width(part)
+	}
+	return parts, totalWidth
+}
+
 // View implements tea.Model - renders keybindings as inline hints.
 // When collapsed, shows only defaultVisible bindings with a "? more" indicator.
 // When width is set, truncates to fit within width with a "+N more" indicator.
+// Reserved bindings (set via WithReservedBindings) are always shown at the end.
 // When focused, shows a visual indicator.
 func (m Model) View() string {
-	if len(m.bindings) == 0 {
+	if len(m.bindings) == 0 && len(m.reservedBindings) == 0 {
 		return ""
 	}
 
@@ -476,21 +647,26 @@ func (m Model) View() string {
 	bw := 2
 	currentWidth := bw + m.borderPaddingLeft + m.borderPaddingRight
 
+	// Calculate reserved bindings (always shown at end)
+	reservedParts, reservedWidth := m.buildReservedParts(sepWidth)
+
 	for i, b := range bindings {
-		key := m.keyStyle.Render(b.Key)
-		desc := m.descStyle.Render(b.Desc)
-		part := key + ": " + desc
+		part := m.renderBinding(b)
 		partWidth := lipgloss.Width(part)
 
 		// Check if adding this part would exceed width (if width is set)
 		if m.width > 0 && len(parts) > 0 {
-			// Reserve space for potential "+N more" indicator
+			// Reserve space for potential "+N more" indicator and reserved bindings
 			moreIndicator := fmt.Sprintf("+%d more", len(bindings)-i+hiddenCount)
 			moreWidth := lipgloss.Width(m.descStyle.Render(moreIndicator))
 			neededWidth := currentWidth + sepWidth + partWidth
+			totalReserved := reservedWidth
+			if totalReserved > 0 {
+				totalReserved += sepWidth
+			}
 
 			// If this part won't fit, stop and show remaining count
-			if neededWidth+sepWidth+moreWidth > m.width {
+			if neededWidth+sepWidth+moreWidth+totalReserved > m.width {
 				hiddenCount += len(bindings) - i
 				break
 			}
@@ -505,16 +681,15 @@ func (m Model) View() string {
 
 	// Add "? more" or "+N more" indicator when there are hidden hints
 	if hiddenCount > 0 {
-		var moreText string
+		format := "? %d more"
 		if m.width > 0 {
-			// Width-based truncation uses "+N more" format
-			moreText = m.descStyle.Render(fmt.Sprintf("+%d more", hiddenCount))
-		} else {
-			// Collapsed state uses "? N more" format
-			moreText = m.descStyle.Render(fmt.Sprintf("? %d more", hiddenCount))
+			format = "+%d more"
 		}
-		parts = append(parts, moreText)
+		parts = append(parts, m.descStyle.Render(fmt.Sprintf(format, hiddenCount)))
 	}
+
+	// Add reserved bindings at the end (always visible)
+	parts = append(parts, reservedParts...)
 
 	result := strings.Join(parts, sep)
 
@@ -681,4 +856,79 @@ func (m Model) renderHelpContent(content string, width int) string {
 	}
 
 	return result
+}
+
+// AnimationCmd returns a tick command if animation is in progress.
+// Call this after ShowHelp()/HideHelp() when using animation programmatically.
+func (m Model) AnimationCmd() tea.Cmd {
+	if m.animating {
+		return heightTick()
+	}
+	return nil
+}
+
+// Animating returns whether an animation is currently in progress.
+func (m Model) Animating() bool {
+	return m.animating
+}
+
+// AnimatedHelpHeight returns the current animated height for layout calculations.
+// Returns full HelpHeight() if animation is disabled or not animating.
+func (m Model) AnimatedHelpHeight() int {
+	if !m.animationEnabled || !m.animating {
+		if m.showHelp {
+			return m.HelpHeight()
+		}
+		return 0
+	}
+	return int(math.Ceil(m.animatedHeight))
+}
+
+// ViewHelpPartial renders help window with only visibleLines visible.
+// Clips from top for HelpModeUp (bottom-anchored), from bottom for other modes (top-anchored).
+// For Up mode, returns only the last N lines - parent handles positioning padding.
+func (m Model) ViewHelpPartial(visibleLines int) string {
+	if visibleLines <= 0 {
+		return ""
+	}
+
+	fullContent := m.ViewHelp()
+	lines := strings.Split(fullContent, "\n")
+	totalLines := len(lines)
+
+	if visibleLines >= totalLines {
+		return fullContent
+	}
+
+	if m.helpMode == HelpModeUp {
+		// Bottom-anchored: show last N lines
+		// Parent handles positioning padding for "grow upward" effect
+		return strings.Join(lines[totalLines-visibleLines:], "\n")
+	}
+
+	// Top-anchored (Down, Top, Center): show first N lines
+	return strings.Join(lines[:visibleLines], "\n")
+}
+
+// AnimationPaddingLines returns the number of padding lines needed above
+// the help content for Up mode or overlay mode animation (bottom-anchoring).
+// Returns 0 if not animating or not in Up/overlay mode.
+func (m Model) AnimationPaddingLines() int {
+	if !m.animationEnabled || !m.animating {
+		return 0
+	}
+	// For overlay or Up mode, calculate padding for bottom-anchoring effect
+	if m.overlay || m.helpMode == HelpModeUp {
+		return m.HelpHeight() - m.AnimatedHelpHeight()
+	}
+	return 0
+}
+
+// ViewHelpAnimated returns the help content at current animated height.
+// Falls back to ViewHelp() if animation is disabled or for Center mode (no animation).
+func (m Model) ViewHelpAnimated() string {
+	if !m.animationEnabled || m.helpMode == HelpModeCenter {
+		return m.ViewHelp()
+	}
+	return m.ViewHelpPartial(m.AnimatedHelpHeight())
 }

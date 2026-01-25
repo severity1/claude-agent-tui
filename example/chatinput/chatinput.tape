@@ -5,8 +5,8 @@
 #   vhs validate example/chatinput/chatinput.tape  # Syntax check
 #   vhs example/chatinput/chatinput.tape           # Generate screenshots
 #
-# This tape captures 15 key interaction states for visual regression testing.
-# Includes theme switching to demonstrate the theme discovery API.
+# This tape captures 17 key interaction states for visual regression testing.
+# Includes theme switching, help modes, and overlay mode demonstration.
 
 # Terminal configuration
 Output example/chatinput/screenshots/chatinput-demo.gif
@@ -91,12 +91,33 @@ Shift+H
 Sleep 500ms
 Screenshot example/chatinput/screenshots/13-help-mode-center.png
 
-# Screenshot 15: Clear state (Esc to close help, Esc to return to input)
+# Screenshot 15: Close help and return to Down mode for overlay test
 Escape
+Sleep 300ms
+Shift+H
+Sleep 300ms
+
+# Screenshot 16: Enable overlay mode (Shift+O key) in Down mode
+Shift+O
+Sleep 500ms
+Screenshot example/chatinput/screenshots/14-overlay-enabled.png
+
+# Screenshot 17: Open help with overlay mode (? key) - shows snappier animation
+Type "?"
+Sleep 600ms
+Screenshot example/chatinput/screenshots/15-overlay-help-open.png
+
+# Screenshot 18: Close help with overlay mode
+Escape
+Sleep 600ms
+Screenshot example/chatinput/screenshots/16-overlay-help-closed.png
+
+# Screenshot 19: Disable overlay and return to normal mode
+Shift+O
 Sleep 300ms
 Escape
 Sleep 500ms
-Screenshot example/chatinput/screenshots/14-clear-state.png
+Screenshot example/chatinput/screenshots/17-clear-state.png
 
 # Exit the application
 Ctrl+C
