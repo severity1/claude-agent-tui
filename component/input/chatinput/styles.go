@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/severity1/claude-agent-tui/internal/styles"
 	"github.com/severity1/claude-agent-tui/theme"
 )
 
@@ -53,43 +55,39 @@ type Styles struct {
 // DefaultStyles returns the default styles for ChatInput.
 // These use neutral colors that work in most terminals.
 func DefaultStyles() Styles {
-	primary := lipgloss.AdaptiveColor{Light: "#c96a2a", Dark: "#fab283"}
-	text := lipgloss.AdaptiveColor{Light: "#1a1a1a", Dark: "#e0e0e0"}
-	textMuted := lipgloss.AdaptiveColor{Light: "#666666", Dark: "#6a6a6a"}
-	surface := lipgloss.AdaptiveColor{Light: "#f5f5f5", Dark: "#212121"}
-	border := lipgloss.AdaptiveColor{Light: "#c0c0c0", Dark: "#4b4c5c"}
+	colors := styles.DefaultColors()
 
 	return Styles{
 		PromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
 			Bold(true).
-			Foreground(textMuted).
-			Background(surface),
+			Foreground(colors.TextMuted).
+			Background(colors.ContentBg),
 		FocusedPromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
 			Bold(true).
-			Foreground(primary).
-			Background(surface),
+			Foreground(colors.Primary).
+			Background(colors.ContentBg),
 		ModeStyle: lipgloss.NewStyle().
-			Foreground(primary).
+			Foreground(colors.Primary).
 			Bold(true).
-			Background(surface),
+			Background(colors.ContentBg),
 		InfoStyle: lipgloss.NewStyle().
-			Foreground(textMuted).
-			Background(surface),
+			Foreground(colors.TextMuted).
+			Background(colors.ContentBg),
 		PlaceholderStyle: lipgloss.NewStyle().
-			Foreground(textMuted).
-			Background(surface),
+			Foreground(colors.TextMuted).
+			Background(colors.ContentBg),
 
 		Border:           lipgloss.ThickBorder(),
-		BorderColor:      border,
-		FlashBorderColor: primary,
+		BorderColor:      colors.Border,
+		FlashBorderColor: colors.Primary,
 		FlashDuration:    150 * time.Millisecond,
 
-		ContentBg:      surface,
-		TextColor:      text,
-		TextMutedColor: textMuted,
-		PrimaryColor:   primary,
+		ContentBg:      colors.ContentBg,
+		TextColor:      colors.Text,
+		TextMutedColor: colors.TextMuted,
+		PrimaryColor:   colors.Primary,
 
 		BorderPaddingTop:    1,
 		BorderPaddingBottom: 1,
@@ -103,37 +101,39 @@ func StylesFromPalette(p *theme.Palette) Styles {
 		return DefaultStyles()
 	}
 
+	colors := styles.ColorsFromPalette(p)
+
 	return Styles{
 		PromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
 			Bold(true).
-			Foreground(p.TextMuted).
-			Background(p.BackgroundPanel),
+			Foreground(colors.TextMuted).
+			Background(colors.ContentBg),
 		FocusedPromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
 			Bold(true).
-			Foreground(p.Primary).
-			Background(p.BackgroundPanel),
+			Foreground(colors.Primary).
+			Background(colors.ContentBg),
 		ModeStyle: lipgloss.NewStyle().
-			Foreground(p.Primary).
+			Foreground(colors.Primary).
 			Bold(true).
-			Background(p.BackgroundPanel),
+			Background(colors.ContentBg),
 		InfoStyle: lipgloss.NewStyle().
-			Foreground(p.TextMuted).
-			Background(p.BackgroundPanel),
+			Foreground(colors.TextMuted).
+			Background(colors.ContentBg),
 		PlaceholderStyle: lipgloss.NewStyle().
-			Foreground(p.TextMuted).
-			Background(p.BackgroundPanel),
+			Foreground(colors.TextMuted).
+			Background(colors.ContentBg),
 
 		Border:           lipgloss.ThickBorder(),
-		BorderColor:      p.Border,
-		FlashBorderColor: p.Primary,
+		BorderColor:      colors.Border,
+		FlashBorderColor: colors.Primary,
 		FlashDuration:    150 * time.Millisecond,
 
-		ContentBg:      p.BackgroundPanel,
-		TextColor:      p.Text,
-		TextMutedColor: p.TextMuted,
-		PrimaryColor:   p.Primary,
+		ContentBg:      colors.ContentBg,
+		TextColor:      colors.Text,
+		TextMutedColor: colors.TextMuted,
+		PrimaryColor:   colors.Primary,
 
 		BorderPaddingTop:    1,
 		BorderPaddingBottom: 1,

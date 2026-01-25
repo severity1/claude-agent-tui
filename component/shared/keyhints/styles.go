@@ -2,6 +2,8 @@ package keyhints
 
 import (
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/severity1/claude-agent-tui/internal/styles"
 	"github.com/severity1/claude-agent-tui/theme"
 )
 
@@ -31,23 +33,21 @@ type Styles struct {
 // DefaultStyles returns the default styles for KeyHints.
 // These use neutral colors that work in most terminals.
 func DefaultStyles() Styles {
-	primary := lipgloss.AdaptiveColor{Light: "#c96a2a", Dark: "#fab283"}
-	textMuted := lipgloss.AdaptiveColor{Light: "#666666", Dark: "#6a6a6a"}
-	border := lipgloss.AdaptiveColor{Light: "#c0c0c0", Dark: "#4b4c5c"}
+	colors := styles.DefaultColors()
 
 	return Styles{
-		KeyStyle:   lipgloss.NewStyle().Bold(true).Foreground(textMuted),
-		DescStyle:  lipgloss.NewStyle().Foreground(textMuted),
-		SepStyle:   lipgloss.NewStyle().Faint(true).Foreground(textMuted),
-		FocusStyle: lipgloss.NewStyle().Foreground(primary),
+		KeyStyle:   lipgloss.NewStyle().Bold(true).Foreground(colors.TextMuted),
+		DescStyle:  lipgloss.NewStyle().Foreground(colors.TextMuted),
+		SepStyle:   lipgloss.NewStyle().Faint(true).Foreground(colors.TextMuted),
+		FocusStyle: lipgloss.NewStyle().Foreground(colors.Primary),
 		HelpStyle: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(border).
+			BorderForeground(colors.Border).
 			Padding(1, 2),
 
-		BorderColor:  border,
-		PrimaryColor: primary,
-		ContentBg:    nil, // transparent by default
+		BorderColor:  colors.Border,
+		PrimaryColor: colors.Primary,
+		ContentBg:    nil, // keyhints uses nil by default (transparent)
 	}
 }
 
@@ -58,18 +58,20 @@ func StylesFromPalette(p *theme.Palette) Styles {
 		return DefaultStyles()
 	}
 
+	colors := styles.ColorsFromPalette(p)
+
 	return Styles{
-		KeyStyle:   lipgloss.NewStyle().Bold(true).Foreground(p.TextMuted),
-		DescStyle:  lipgloss.NewStyle().Foreground(p.TextMuted),
-		SepStyle:   lipgloss.NewStyle().Faint(true).Foreground(p.TextMuted),
-		FocusStyle: lipgloss.NewStyle().Foreground(p.Primary),
+		KeyStyle:   lipgloss.NewStyle().Bold(true).Foreground(colors.TextMuted),
+		DescStyle:  lipgloss.NewStyle().Foreground(colors.TextMuted),
+		SepStyle:   lipgloss.NewStyle().Faint(true).Foreground(colors.TextMuted),
+		FocusStyle: lipgloss.NewStyle().Foreground(colors.Primary),
 		HelpStyle: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(p.Border).
+			BorderForeground(colors.Border).
 			Padding(1, 2),
 
-		BorderColor:  p.Border,
-		PrimaryColor: p.Primary,
-		ContentBg:    p.BackgroundPanel,
+		BorderColor:  colors.Border,
+		PrimaryColor: colors.Primary,
+		ContentBg:    colors.ContentBg,
 	}
 }

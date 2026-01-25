@@ -26,6 +26,16 @@ func TestDefaultColors_ReturnsExpectedValues(t *testing.T) {
 	if colors.ContentBg != nil {
 		t.Error("DefaultColors().ContentBg should be nil by default")
 	}
+
+	// Verify Text is set
+	if colors.Text == nil {
+		t.Error("DefaultColors().Text should not be nil")
+	}
+
+	// Verify TextMuted is set
+	if colors.TextMuted == nil {
+		t.Error("DefaultColors().TextMuted should not be nil")
+	}
 }
 
 func TestColorsFromPalette_NilReturnsDefaults(t *testing.T) {
@@ -50,6 +60,8 @@ func TestColorsFromPalette_ExtractsCorrectFields(t *testing.T) {
 		Border:          lipgloss.AdaptiveColor{Light: "#111111", Dark: "#222222"},
 		Primary:         lipgloss.AdaptiveColor{Light: "#333333", Dark: "#444444"},
 		BackgroundPanel: lipgloss.AdaptiveColor{Light: "#555555", Dark: "#666666"},
+		Text:            lipgloss.AdaptiveColor{Light: "#777777", Dark: "#888888"},
+		TextMuted:       lipgloss.AdaptiveColor{Light: "#999999", Dark: "#aaaaaa"},
 	}
 
 	colors := styles.ColorsFromPalette(palette)
@@ -70,5 +82,17 @@ func TestColorsFromPalette_ExtractsCorrectFields(t *testing.T) {
 	contentBg := colors.ContentBg.(lipgloss.AdaptiveColor)
 	if contentBg.Light != "#555555" || contentBg.Dark != "#666666" {
 		t.Errorf("ColorsFromPalette ContentBg = %v, want {Light:#555555, Dark:#666666}", colors.ContentBg)
+	}
+
+	// Verify Text is extracted correctly
+	text := colors.Text.(lipgloss.AdaptiveColor)
+	if text.Light != "#777777" || text.Dark != "#888888" {
+		t.Errorf("ColorsFromPalette Text = %v, want {Light:#777777, Dark:#888888}", colors.Text)
+	}
+
+	// Verify TextMuted is extracted correctly
+	textMuted := colors.TextMuted.(lipgloss.AdaptiveColor)
+	if textMuted.Light != "#999999" || textMuted.Dark != "#aaaaaa" {
+		t.Errorf("ColorsFromPalette TextMuted = %v, want {Light:#999999, Dark:#aaaaaa}", colors.TextMuted)
 	}
 }

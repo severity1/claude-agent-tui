@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/severity1/claude-agent-tui/internal/accessibility"
+	"github.com/severity1/claude-agent-tui/internal/focus"
 	"github.com/severity1/claude-agent-tui/internal/styles"
 	"github.com/severity1/claude-agent-tui/theme"
 )
@@ -52,6 +53,7 @@ func heightTick() tea.Cmd {
 
 // Model represents the keyhints component state.
 type Model struct {
+	focus.State      // embedded focus tracking (provides Focus(), Blur(), Focused())
 	bindings         []Binding
 	reservedBindings []Binding // bindings always shown at end of bar (e.g., "?", "Esc")
 	separator        string
@@ -64,13 +66,10 @@ type Model struct {
 	width            int
 	expanded         bool // whether all bindings are visible in inline view
 	defaultVisible   int  // number of bindings to show when collapsed
-	focused          bool // whether the component has focus
 	showHelp         bool // whether to show the help window
 
-	// Colors for dynamic styling
-	borderColor  lipgloss.TerminalColor // border color when not focused
-	primaryColor lipgloss.TerminalColor // accent color for focus indication
-	contentBg    lipgloss.TerminalColor // background color for help content
+	// Background color for help content
+	contentBg lipgloss.TerminalColor
 
 	// Help window configuration
 	helpMode HelpMode // how the help window expands
@@ -110,18 +109,16 @@ func New(bindings []Binding, opts ...Option) Model {
 		padding:        DefaultPadding,
 		expanded:       true, // show all by default for backwards compatibility
 		defaultVisible: DefaultVisibleCount,
-		borderColor:    defaults.BorderColor,
-		primaryColor:   defaults.PrimaryColor,
 		contentBg:      defaults.ContentBg,
 		helpMode:       HelpModeDown, // default: expand downward
 
-		// Inline bar defaults
-		border: styles.BorderConfig{
-			Style:       lipgloss.ThickBorder(),
-			Left:        true,  // visible left border
-			Right:       false, // invisible but space reserved
-			PaddingLeft: 1,
-		},
+		// Inline bar defaults - use NewBorderConfig for consistent construction
+		border: styles.NewBorderConfig(
+			styles.WithBorderLeft(true),
+			styles.WithBorderRight(false),
+			styles.WithBorderColor(defaults.BorderColor),
+			styles.WithBorderFocusColor(defaults.PrimaryColor),
+		),
 
 		// Centered window defaults (uses styles.CenterBorderConfig as base)
 		centerBorder: styles.CenterBorderConfig(),
@@ -271,10 +268,10 @@ func WithBorderPadding(top, bottom, left, right int) Option {
 }
 
 // WithBorderColor sets the border color when not focused.
-// When focused, the focusStyle foreground color takes precedence.
+// When focused, the FocusColor from BorderConfig takes precedence.
 func WithBorderColor(color lipgloss.TerminalColor) Option {
 	return func(m *Model) {
-		m.borderColor = color
+		m.border.Color = color
 	}
 }
 
@@ -342,8 +339,8 @@ func WithPalette(p *theme.Palette) Option {
 		m.sepStyle = s.SepStyle
 		m.focusStyle = s.FocusStyle
 		m.helpStyle = s.HelpStyle
-		m.borderColor = s.BorderColor
-		m.primaryColor = s.PrimaryColor
+		m.border.Color = s.BorderColor
+		m.border.FocusColor = s.PrimaryColor
 		m.contentBg = s.ContentBg
 	}
 }
@@ -357,8 +354,8 @@ func WithStyles(s Styles) Option {
 		m.sepStyle = s.SepStyle
 		m.focusStyle = s.FocusStyle
 		m.helpStyle = s.HelpStyle
-		m.borderColor = s.BorderColor
-		m.primaryColor = s.PrimaryColor
+		m.border.Color = s.BorderColor
+		m.border.FocusColor = s.PrimaryColor
 		m.contentBg = s.ContentBg
 	}
 }
@@ -438,22 +435,7 @@ func (m Model) Width() int {
 	return m.width
 }
 
-// Focus sets the focused state and returns nil (no cursor blink needed for this component).
-// The return type matches Bubble Tea conventions for composability with other components.
-func (m *Model) Focus() tea.Cmd {
-	m.focused = true
-	return nil
-}
-
-// Blur removes focus from the component.
-func (m *Model) Blur() {
-	m.focused = false
-}
-
-// Focused returns whether the component has focus.
-func (m Model) Focused() bool {
-	return m.focused
-}
+// Focus, Blur, and Focused methods are inherited from embedded focus.State
 
 // ShowHelp opens the help window.
 // When animation is enabled and REDUCE_MOTION is not set, starts animation.
@@ -577,7 +559,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, heightTick()
 
 	case tea.KeyMsg:
-		if !m.focused {
+		if !m.Focused() {
 			return m, nil
 		}
 		switch msg.String() {
@@ -699,14 +681,8 @@ func (m Model) View() string {
 	// Apply left padding
 	result = m.padding + result
 
-	// Determine current border color: focusStyle color when focused, borderColor when unfocused
-	currentBorderColor := m.borderColor
-	if m.focused {
-		currentBorderColor = m.focusStyle.GetForeground()
-	}
-
-	// Apply border styling using the border package
-	style := m.border.ApplyToStyleWithColor(lipgloss.NewStyle(), currentBorderColor)
+	// Apply border styling - BorderConfig.Color/FocusColor handles focus state
+	style := m.border.ApplyToStyle(lipgloss.NewStyle(), m.Focused())
 
 	// Apply width for consistent full-width rendering (like ChatInput)
 	// bw was already calculated at the start of View()
@@ -787,12 +763,10 @@ func (m Model) ViewHelp() string {
 // renderHelpContent wraps content with border styling for the help window.
 // Centered mode uses center-specific config; attached modes inherit inline config.
 func (m Model) renderHelpContent(content string, width int) string {
-	// Use focusStyle color for border (help window is always "active" when shown)
-	borderColor := m.focusStyle.GetForeground()
-
 	if m.helpMode == HelpModeCenter {
 		// Centered: use center-specific config for floating modal appearance
-		style := m.centerBorder.ApplyToStyleCentered(lipgloss.NewStyle(), borderColor)
+		// Help window always shows in focused state
+		style := m.centerBorder.ApplyToStyleCentered(lipgloss.NewStyle(), m.border.FocusColor)
 
 		// Apply background color to border/padding areas
 		if m.contentBg != nil {
@@ -817,8 +791,8 @@ func (m Model) renderHelpContent(content string, width int) string {
 	}
 
 	// Attached modes (Down/Up/Top): inherit inline config
-	// Apply border styling using the border package
-	style := m.border.ApplyToStyleWithColor(lipgloss.NewStyle(), borderColor)
+	// Help window always shows in focused state
+	style := m.border.ApplyToStyle(lipgloss.NewStyle(), true)
 
 	// Apply background color to border/padding areas
 	if m.contentBg != nil {

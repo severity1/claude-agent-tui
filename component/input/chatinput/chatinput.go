@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/severity1/claude-agent-tui/internal/accessibility"
+	"github.com/severity1/claude-agent-tui/internal/focus"
 	"github.com/severity1/claude-agent-tui/internal/styles"
 	"github.com/severity1/claude-agent-tui/theme"
 )
@@ -53,8 +54,8 @@ const DefaultPrompt = ""
 
 // Model represents the chat input component state.
 type Model struct {
+	focus.State        // embedded focus tracking (provides Focused())
 	textarea           textarea.Model
-	focused            bool
 	history            []string
 	historyIdx         int // -1 means "new input", 0+ means position in history (0 = most recent)
 	historySize        int
@@ -123,14 +124,13 @@ func New(opts ...Option) Model {
 		infoStyle:          defaults.InfoStyle,
 		// Visual styling defaults
 		contentBg: defaults.ContentBg,
-		border: styles.BorderConfig{
-			Style:         defaults.Border,
-			Color:         defaults.BorderColor,
-			Left:          true, // default: show left border
-			Right:         true, // default: show right border
-			PaddingTop:    defaults.BorderPaddingTop,
-			PaddingBottom: defaults.BorderPaddingBottom,
-		},
+		border: styles.NewBorderConfig(
+			styles.WithBorderStyle(defaults.Border),
+			styles.WithBorderColor(defaults.BorderColor),
+			styles.WithBorderLeft(true),
+			styles.WithBorderRight(true),
+			styles.WithBorderPadding(defaults.BorderPaddingTop, defaults.BorderPaddingBottom, 0, 0),
+		),
 		flashBorderColor: defaults.FlashBorderColor,
 		flashDuration:    defaults.FlashDuration,
 		// Store colors for placeholder rendering
@@ -411,21 +411,20 @@ func WithStyles(s Styles) Option {
 }
 
 // Focus sets the focused state and returns a command for cursor blink.
+// Overrides embedded focus.State.Focus() to also delegate to textarea.
 func (m *Model) Focus() tea.Cmd {
-	m.focused = true
-	return m.textarea.Focus()
+	m.State.Focus()           // track our state via embedded focus.State
+	return m.textarea.Focus() // delegate to textarea
 }
 
 // Blur removes focus from the input.
+// Overrides embedded focus.State.Blur() to also delegate to textarea.
 func (m *Model) Blur() {
-	m.focused = false
+	m.State.Blur()
 	m.textarea.Blur()
 }
 
-// Focused returns whether the input is focused.
-func (m Model) Focused() bool {
-	return m.focused
-}
+// Focused() is inherited from embedded focus.State - no override needed
 
 // Value returns the current input text.
 func (m Model) Value() string {
@@ -545,7 +544,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if !m.focused {
+	if !m.Focused() {
 		return m, nil
 	}
 
@@ -692,7 +691,7 @@ func (m Model) View() string {
 
 	// Select prompt style based on focus state - "light up" when focused
 	promptStyle := m.promptStyle
-	if m.focused {
+	if m.Focused() {
 		promptStyle = m.focusedPromptStyle
 	}
 	prompt := promptStyle.Render(m.prompt)
