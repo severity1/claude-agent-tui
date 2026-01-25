@@ -115,4 +115,16 @@
 // Key messages are intercepted and transformed based on the keybindings above.
 // Other messages are passed through to the underlying textarea. The View() method
 // uses lipgloss.JoinHorizontal for proper multi-line prompt alignment.
+//
+// # View() Mutation Pattern
+//
+// The View() method intentionally mutates the receiver's textarea height to implement
+// auto-expansion behavior. This is safe in Bubble Tea because:
+//   - Models are passed by value, so mutations don't affect the caller's copy
+//   - The mutation enables dynamic height adjustment based on content
+//   - Alternative approaches (storing height in Update) add complexity without benefit
+//
+// This pattern is documented here because it may appear unusual - View() is typically
+// a pure function. However, for auto-expanding textareas, mutating the internal
+// textarea height during render is the most practical approach.
 package chatinput

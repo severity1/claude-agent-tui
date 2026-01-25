@@ -16,6 +16,45 @@ func TestDefault(t *testing.T) {
 	}
 }
 
+// TestGetWithDefault verifies GetWithDefault() returns default for unknown themes.
+func TestGetWithDefault(t *testing.T) {
+	tests := []struct {
+		name       string
+		themeName  string
+		wantNonNil bool
+	}{
+		{"known theme", "catppuccin", true},
+		{"unknown theme", "nonexistent", true},
+		{"empty name", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := theme.GetWithDefault(tt.themeName)
+			if tt.wantNonNil && p == nil {
+				t.Errorf("GetWithDefault(%q) returned nil, expected non-nil", tt.themeName)
+			}
+		})
+	}
+}
+
+// TestGetWithDefault_ReturnsCorrectTheme verifies GetWithDefault returns the
+// named theme when it exists, and the default when it doesn't.
+func TestGetWithDefault_ReturnsCorrectTheme(t *testing.T) {
+	// Known theme should return that theme
+	dracula := theme.GetWithDefault("dracula")
+	if dracula.Primary.Dark != "#bd93f9" {
+		t.Errorf("GetWithDefault(dracula).Primary.Dark = %q, expected #bd93f9", dracula.Primary.Dark)
+	}
+
+	// Unknown theme should return default (catppuccin)
+	unknown := theme.GetWithDefault("nonexistent")
+	catppuccin := theme.Get("catppuccin")
+	if unknown.Primary.Dark != catppuccin.Primary.Dark {
+		t.Errorf("GetWithDefault(nonexistent) should return default theme")
+	}
+}
+
 // TestGet verifies Get() returns correct values.
 func TestGet(t *testing.T) {
 	tests := []struct {

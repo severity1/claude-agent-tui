@@ -15,8 +15,14 @@ var (
 )
 
 // Default returns the default theme palette (catppuccin).
+// Panics if the default theme is not registered, indicating a configuration error.
+// This is an init-time safety check - if it panics, ensure theme/themes is imported.
 func Default() *Palette {
-	return Get(defaultTheme)
+	p := Get(defaultTheme)
+	if p == nil {
+		panic("theme: default theme " + defaultTheme + " not registered")
+	}
+	return p
 }
 
 // Get returns a pointer to the named theme palette.
@@ -28,6 +34,15 @@ func Get(name string) *Palette {
 		return &p
 	}
 	return nil
+}
+
+// GetWithDefault returns the named theme or the default if not found.
+// Use this instead of Get() when you want guaranteed non-nil result.
+func GetWithDefault(name string) *Palette {
+	if p := Get(name); p != nil {
+		return p
+	}
+	return Default()
 }
 
 // List returns a sorted list of all registered theme names.

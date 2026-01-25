@@ -18,6 +18,9 @@ type Styles struct {
 	// InfoStyle is the style for the info bar text.
 	InfoStyle lipgloss.Style
 	// PlaceholderStyle is the style for placeholder text.
+	// Note: This style's colors (Foreground=TextMutedColor, Background=ContentBg)
+	// are applied via configureTextareaStyle() when WithPalette/WithStyles is used.
+	// Custom placeholder rendering also uses these same colors directly.
 	PlaceholderStyle lipgloss.Style
 
 	// Border is the border style (Thick, Rounded, Normal, etc.).

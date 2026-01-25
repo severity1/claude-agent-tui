@@ -148,10 +148,11 @@ func (e StreamErrorMsg) Error() string {
 
 // StreamCmd returns a tea.Cmd that reads from SDK message channel.
 // Call this in a loop to continuously receive messages.
+// Returns StreamErrorMsg if channel is nil (indicates programming error).
 func StreamCmd(ctx context.Context, ch <-chan claudecode.Message) tea.Cmd {
 	return func() tea.Msg {
 		if ch == nil {
-			return StreamDoneMsg{}
+			return StreamErrorMsg{Err: fmt.Errorf("StreamCmd called with nil channel")}
 		}
 
 		select {
@@ -328,12 +329,15 @@ func adaptResultMessage(result *claudecode.ResultMessage) tea.Msg {
 }
 
 // extractIndex extracts the index field from an event map.
-// Returns 0 if the field is missing or not a number.
-// Note: Since 0 is a valid content block index, callers cannot distinguish
-// between "first block" and "missing index" from the return value alone.
-// In practice, the SDK always provides valid indices for stream events.
+// Returns -1 if the field is missing or not a valid number.
+// This allows callers to distinguish between "first block (index 0)"
+// and "missing index (-1)" for proper error handling.
 func extractIndex(event map[string]any) int {
-	return toInt(event["index"])
+	v, ok := event["index"]
+	if !ok {
+		return -1
+	}
+	return toInt(v)
 }
 
 // toInt converts a value to int, handling both int and float64 types

@@ -32,7 +32,9 @@ const (
 
 // SubmitMsg is emitted when the user submits the input (presses Enter).
 type SubmitMsg struct {
-	Text string
+	Text       string
+	AutoAccept bool // Future: indicates auto-accept mode was active
+	PlanMode   bool // Future: indicates plan mode was active
 }
 
 // CopiedMsg is emitted when the input content is copied to clipboard.
@@ -169,13 +171,18 @@ func WithHeight(h int) Option {
 // Values <= 0 are ignored and DefaultHistorySize (100) is used instead.
 // This is intentional: negative values have no semantic meaning for history size,
 // and zero would disable history entirely which should be explicit via a separate option.
+//
+// Design note: Silent fallback for invalid values is intentional for these reasons:
+//   - It allows safe use in chains without error checking
+//   - The default behavior is always sensible (non-zero history)
+//   - An error return would require callers to handle a case that rarely matters
+//   - Configuration errors are typically caught during development, not runtime
 func WithHistorySize(n int) Option {
 	return func(m *Model) {
 		if n > 0 {
 			m.historySize = n
 		}
-		// Note: Invalid values (n <= 0) fall through to default.
-		// This is intentional per the documented behavior.
+		// Invalid values (n <= 0) silently use default per documented behavior above.
 	}
 }
 
@@ -314,8 +321,13 @@ func WithBorderPadding(top, bottom int) Option {
 
 // WithPalette applies a theme palette to the component.
 // This sets all styling from the palette, which can be overridden by subsequent options.
+// If palette is nil, the component retains its current styles (no-op).
+// Note: A nil palette typically indicates theme.Get() failed for an unknown theme.
+// Consider using theme.GetWithDefault() for guaranteed non-nil palette.
 func WithPalette(p *theme.Palette) Option {
 	return func(m *Model) {
+		// Silent no-op for nil - allows safe chaining even when theme lookup fails.
+		// Callers should use theme.GetWithDefault() to avoid this edge case.
 		if p == nil {
 			return
 		}

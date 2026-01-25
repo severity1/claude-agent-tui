@@ -189,8 +189,13 @@ func WithPadding(padding string) Option {
 
 // WithPalette applies a theme palette to the component.
 // This sets all styling from the palette, which can be overridden by subsequent options.
+// If palette is nil, the component retains its current styles (no-op).
+// Note: A nil palette typically indicates theme.Get() failed for an unknown theme.
+// Consider using theme.GetWithDefault() for guaranteed non-nil palette.
 func WithPalette(p *theme.Palette) Option {
 	return func(m *Model) {
+		// Silent no-op for nil - allows safe chaining even when theme lookup fails.
+		// Callers should use theme.GetWithDefault() to avoid this edge case.
 		if p == nil {
 			return
 		}

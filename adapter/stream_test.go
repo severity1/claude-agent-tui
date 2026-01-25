@@ -248,15 +248,22 @@ func TestStreamCmd_ContextCancellation_ReturnsStreamErrorMsg(t *testing.T) {
 	}
 }
 
-func TestStreamCmd_NilChannel_ReturnsStreamDoneMsg(t *testing.T) {
+func TestStreamCmd_NilChannel_ReturnsStreamErrorMsg(t *testing.T) {
 	ctx := context.Background()
 
 	cmd := adapter.StreamCmd(ctx, nil)
 	result := cmd()
 
-	_, ok := result.(adapter.StreamDoneMsg)
+	errMsg, ok := result.(adapter.StreamErrorMsg)
 	if !ok {
-		t.Fatalf("expected StreamDoneMsg for nil channel, got %T", result)
+		t.Fatalf("expected StreamErrorMsg for nil channel, got %T", result)
+	}
+
+	if errMsg.Err == nil {
+		t.Error("expected non-nil error in StreamErrorMsg")
+	}
+	if errMsg.Err.Error() != "StreamCmd called with nil channel" {
+		t.Errorf("Err = %q, want %q", errMsg.Err.Error(), "StreamCmd called with nil channel")
 	}
 }
 
@@ -839,9 +846,9 @@ func TestAdaptMessage_StreamEvent_MissingIndex(t *testing.T) {
 		t.Fatalf("expected StreamBlockStopMsg, got %T", result)
 	}
 
-	// Should default to 0
-	if msg.Index != 0 {
-		t.Errorf("Index = %d, want 0 for missing index", msg.Index)
+	// Should return -1 for missing index to distinguish from index 0
+	if msg.Index != -1 {
+		t.Errorf("Index = %d, want -1 for missing index", msg.Index)
 	}
 }
 
