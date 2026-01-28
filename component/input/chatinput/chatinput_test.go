@@ -1707,3 +1707,274 @@ func TestModel_View_BordersPreserveWidth(t *testing.T) {
 		t.Errorf("View() line count differs: visible borders=%d, hidden borders=%d", lines1, lines2)
 	}
 }
+
+// ============================================================================
+// KeyMap Tests
+// ============================================================================
+
+func TestDefaultKeyMap_AllBindingsDefined(t *testing.T) {
+	km := chatinput.DefaultKeyMap()
+
+	// Verify all 6 bindings have Display and Desc
+	bindings := []struct {
+		name    string
+		binding chatinput.KeyBinding
+	}{
+		{"Submit", km.Submit},
+		{"InsertNewline", km.InsertNewline},
+		{"Clear", km.Clear},
+		{"HistoryPrev", km.HistoryPrev},
+		{"HistoryNext", km.HistoryNext},
+		{"Copy", km.Copy},
+	}
+
+	for _, b := range bindings {
+		if b.binding.Display == "" {
+			t.Errorf("%s.Display is empty", b.name)
+		}
+		if b.binding.Desc == "" {
+			t.Errorf("%s.Desc is empty", b.name)
+		}
+	}
+}
+
+func TestDefaultKeyMap_SubmitMatchesEnter(t *testing.T) {
+	km := chatinput.DefaultKeyMap()
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	if !km.Submit.Matches(enterMsg) {
+		t.Error("Default Submit should match Enter key")
+	}
+
+	// Alt+Enter should NOT match Submit
+	altEnterMsg := tea.KeyMsg{Type: tea.KeyEnter, Alt: true}
+	if km.Submit.Matches(altEnterMsg) {
+		t.Error("Default Submit should NOT match Alt+Enter")
+	}
+}
+
+func TestDefaultKeyMap_InsertNewlineMatchesAltEnterAndCtrlJ(t *testing.T) {
+	km := chatinput.DefaultKeyMap()
+
+	altEnterMsg := tea.KeyMsg{Type: tea.KeyEnter, Alt: true}
+	if !km.InsertNewline.Matches(altEnterMsg) {
+		t.Error("InsertNewline should match Alt+Enter")
+	}
+
+	ctrlJMsg := tea.KeyMsg{Type: tea.KeyCtrlJ}
+	if !km.InsertNewline.Matches(ctrlJMsg) {
+		t.Error("InsertNewline should match Ctrl+J")
+	}
+}
+
+func TestNew_UsesDefaultKeyMap(t *testing.T) {
+	m := chatinput.New()
+	km := m.KeyMap()
+
+	// Verify default keymap is applied
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	if !km.Submit.Matches(enterMsg) {
+		t.Error("New model should use default KeyMap with Enter for Submit")
+	}
+}
+
+func TestNew_WithKeyMap_CustomSubmit(t *testing.T) {
+	// Custom keymap with Ctrl+Enter for submit
+	customKm := chatinput.DefaultKeyMap()
+	customKm.Submit = chatinput.NewKeyBinding("Ctrl+Enter", "Submit", "ctrl+enter")
+
+	m := chatinput.New(chatinput.WithKeyMap(customKm))
+	m.Focus()
+	m.SetValue("hello")
+
+	// Regular Enter should NOT submit with custom keymap
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	updated, cmd := m.Update(enterMsg)
+	m = updated.(chatinput.Model)
+
+	// The Enter key should be passed to textarea (adding nothing here since it's special)
+	// The value should NOT be cleared because Submit wasn't triggered
+	// Note: This test verifies that the custom keymap overrides the default
+	if cmd != nil {
+		// If cmd is returned, it means Submit was triggered incorrectly
+		result := cmd()
+		if _, ok := result.(chatinput.SubmitMsg); ok {
+			t.Error("Regular Enter should NOT emit SubmitMsg with custom Submit=Ctrl+Enter")
+		}
+	}
+}
+
+func TestNew_WithKeyMap_VimStyleHistory(t *testing.T) {
+	// Vim-style navigation: Ctrl+P for up, Ctrl+N for down
+	customKm := chatinput.DefaultKeyMap()
+	customKm.HistoryPrev = chatinput.NewKeyBinding("Ctrl+P", "Previous", "ctrl+p")
+	customKm.HistoryNext = chatinput.NewKeyBinding("Ctrl+N", "Next", "ctrl+n")
+
+	m := chatinput.New(chatinput.WithKeyMap(customKm))
+	m.Focus()
+
+	// Submit some history
+	m.SetValue("first")
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(chatinput.Model)
+
+	m.SetValue("second")
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(chatinput.Model)
+
+	// Ctrl+P should navigate history (like Up arrow normally does)
+	ctrlPMsg := tea.KeyMsg{Type: tea.KeyCtrlP}
+	updated, _ = m.Update(ctrlPMsg)
+	m = updated.(chatinput.Model)
+
+	if m.Value() != "second" {
+		t.Errorf("Value() = %q after Ctrl+P, want %q", m.Value(), "second")
+	}
+}
+
+func TestModel_Update_SubmitWithCustomKey(t *testing.T) {
+	// Use F1 for submit
+	customKm := chatinput.DefaultKeyMap()
+	customKm.Submit = chatinput.NewKeyBinding("F1", "Submit", "f1")
+
+	m := chatinput.New(chatinput.WithKeyMap(customKm))
+	m.Focus()
+	m.SetValue("test")
+
+	// F1 should trigger submit
+	f1Msg := tea.KeyMsg{Type: tea.KeyF1}
+	_, cmd := m.Update(f1Msg)
+
+	if cmd == nil {
+		t.Fatal("F1 should trigger SubmitMsg with custom keymap")
+	}
+
+	result := cmd()
+	submitMsg, ok := result.(chatinput.SubmitMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want chatinput.SubmitMsg", result)
+	}
+	if submitMsg.Text != "test" {
+		t.Errorf("SubmitMsg.Text = %q, want %q", submitMsg.Text, "test")
+	}
+}
+
+func TestModel_Update_OldKeyIgnoredWithCustom(t *testing.T) {
+	// Replace Esc clear with Ctrl+U
+	customKm := chatinput.DefaultKeyMap()
+	customKm.Clear = chatinput.NewKeyBinding("Ctrl+U", "Clear", "ctrl+u")
+
+	m := chatinput.New(chatinput.WithKeyMap(customKm))
+	m.Focus()
+	m.SetValue("test")
+
+	// Esc should NOT clear with custom keymap
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updated, _ := m.Update(escMsg)
+	m = updated.(chatinput.Model)
+
+	// Value should remain (Esc no longer clears)
+	if m.Value() != "test" {
+		t.Errorf("Value() = %q after Esc with custom Clear=Ctrl+U, want %q", m.Value(), "test")
+	}
+
+	// Ctrl+U should clear
+	ctrlUMsg := tea.KeyMsg{Type: tea.KeyCtrlU}
+	updated, _ = m.Update(ctrlUMsg)
+	m = updated.(chatinput.Model)
+
+	if m.Value() != "" {
+		t.Errorf("Value() = %q after Ctrl+U, want empty string", m.Value())
+	}
+}
+
+func TestModel_Update_FocusedHandlesKeyMapKeys(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	m.SetValue("test")
+
+	// When focused, Esc should clear (default keymap)
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updated, _ := m.Update(escMsg)
+	m = updated.(chatinput.Model)
+
+	if m.Value() != "" {
+		t.Errorf("Value() = %q after Esc when focused, want empty", m.Value())
+	}
+}
+
+func TestModel_Update_UnfocusedIgnoresKeyMapKeys(t *testing.T) {
+	m := chatinput.New()
+	// NOT focused
+	m.SetValue("test")
+
+	// When not focused, Esc should be ignored
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updated, _ := m.Update(escMsg)
+	m = updated.(chatinput.Model)
+
+	if m.Value() != "test" {
+		t.Errorf("Value() = %q after Esc when unfocused, want %q", m.Value(), "test")
+	}
+}
+
+func TestKeyMap_ToHintBindings_ReturnsAllBindings(t *testing.T) {
+	km := chatinput.DefaultKeyMap()
+	hints := km.ToHintBindings()
+
+	// Should return 6 bindings
+	if len(hints) != 6 {
+		t.Errorf("ToHintBindings() returned %d bindings, want 6", len(hints))
+	}
+}
+
+func TestKeyMap_ToHintBindings_PreservesDisplayAndDesc(t *testing.T) {
+	km := chatinput.DefaultKeyMap()
+	hints := km.ToHintBindings()
+
+	// Find Submit binding
+	var foundSubmit bool
+	for _, h := range hints {
+		if h.Key == km.Submit.Display {
+			foundSubmit = true
+			if h.Desc != km.Submit.Desc {
+				t.Errorf("Submit hint Desc = %q, want %q", h.Desc, km.Submit.Desc)
+			}
+			break
+		}
+	}
+	if !foundSubmit {
+		t.Errorf("ToHintBindings() missing Submit binding with Display=%q", km.Submit.Display)
+	}
+}
+
+func TestKeyMap_ToHintBindings_CustomBindings(t *testing.T) {
+	customKm := chatinput.DefaultKeyMap()
+	customKm.Submit = chatinput.NewKeyBinding("Ctrl+Enter", "Send message", "ctrl+enter")
+
+	hints := customKm.ToHintBindings()
+
+	// Find custom Submit binding
+	var found bool
+	for _, h := range hints {
+		if h.Key == "Ctrl+Enter" && h.Desc == "Send message" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("ToHintBindings() should include custom Submit binding")
+	}
+}
+
+func TestModel_KeyMap_ReturnsCurrentKeyMap(t *testing.T) {
+	customKm := chatinput.DefaultKeyMap()
+	customKm.Submit = chatinput.NewKeyBinding("F5", "Run", "f5")
+
+	m := chatinput.New(chatinput.WithKeyMap(customKm))
+	km := m.KeyMap()
+
+	if km.Submit.Display != "F5" {
+		t.Errorf("KeyMap().Submit.Display = %q, want %q", km.Submit.Display, "F5")
+	}
+}

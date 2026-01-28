@@ -2373,3 +2373,173 @@ func TestNew_WithBorderPadding_PartialNegativeIgnored(t *testing.T) {
 		t.Error("View() returned empty string with partially negative padding")
 	}
 }
+
+// ============================================================================
+// KeyMap Tests
+// ============================================================================
+
+func TestDefaultKeyMap_ToggleHelp(t *testing.T) {
+	km := keyhints.DefaultKeyMap()
+
+	// Default ToggleHelp should match "?"
+	questionMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	if !km.ToggleHelp.Matches(questionMsg) {
+		t.Error("Default ToggleHelp should match ? key")
+	}
+}
+
+func TestDefaultKeyMap_CloseHelp(t *testing.T) {
+	km := keyhints.DefaultKeyMap()
+
+	// Default CloseHelp should match Esc
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	if !km.CloseHelp.Matches(escMsg) {
+		t.Error("Default CloseHelp should match Esc key")
+	}
+}
+
+func TestNew_WithKeyMap(t *testing.T) {
+	customKm := keyhints.DefaultKeyMap()
+	customKm.ToggleHelp = keyhints.NewKeyBinding("h", "Help", "h")
+
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithKeyMap(customKm))
+	m.Focus()
+
+	// Verify custom keymap is applied
+	km := m.KeyMap()
+	if km.ToggleHelp.Display != "h" {
+		t.Errorf("KeyMap().ToggleHelp.Display = %q, want %q", km.ToggleHelp.Display, "h")
+	}
+}
+
+func TestModel_Update_ToggleHelpWithDefault(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...))
+	m.Focus()
+
+	// Should not be showing help initially
+	if m.ShowingHelp() {
+		t.Error("ShowingHelp() = true initially, want false")
+	}
+
+	// "?" should toggle help with default keymap
+	questionMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	updated, _ := m.Update(questionMsg)
+	m = updated.(keyhints.Model)
+
+	if !m.ShowingHelp() {
+		t.Error("ShowingHelp() = false after ?, want true")
+	}
+
+	// Press "?" again to toggle off
+	updated, _ = m.Update(questionMsg)
+	m = updated.(keyhints.Model)
+
+	if m.ShowingHelp() {
+		t.Error("ShowingHelp() = true after second ?, want false")
+	}
+}
+
+func TestModel_Update_ToggleHelpWithCustomKey(t *testing.T) {
+	customKm := keyhints.DefaultKeyMap()
+	customKm.ToggleHelp = keyhints.NewKeyBinding("h", "Help", "h")
+
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithKeyMap(customKm))
+	m.Focus()
+
+	// "?" should NOT toggle help with custom keymap
+	questionMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	updated, _ := m.Update(questionMsg)
+	m = updated.(keyhints.Model)
+
+	if m.ShowingHelp() {
+		t.Error("ShowingHelp() = true after ? with custom keymap (ToggleHelp=h), want false")
+	}
+
+	// "h" should toggle help
+	hMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
+	updated, _ = m.Update(hMsg)
+	m = updated.(keyhints.Model)
+
+	if !m.ShowingHelp() {
+		t.Error("ShowingHelp() = false after h with custom keymap, want true")
+	}
+}
+
+func TestModel_Update_CloseHelpWithEsc(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...))
+	m.Focus()
+
+	// Open help
+	m.ShowHelp()
+	if !m.ShowingHelp() {
+		t.Fatal("ShowingHelp() = false after ShowHelp(), want true")
+	}
+
+	// Esc should close help
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updated, _ := m.Update(escMsg)
+	m = updated.(keyhints.Model)
+
+	if m.ShowingHelp() {
+		t.Error("ShowingHelp() = true after Esc, want false")
+	}
+}
+
+func TestModel_Update_CloseHelpWithCustomKey(t *testing.T) {
+	customKm := keyhints.DefaultKeyMap()
+	customKm.CloseHelp = keyhints.NewKeyBinding("q", "Close", "q")
+
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithKeyMap(customKm))
+	m.Focus()
+
+	// Open help
+	m.ShowHelp()
+
+	// Esc should NOT close help with custom keymap
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	updated, _ := m.Update(escMsg)
+	m = updated.(keyhints.Model)
+
+	if !m.ShowingHelp() {
+		t.Error("ShowingHelp() = false after Esc with custom CloseHelp=q, want true (Esc should be ignored)")
+	}
+
+	// "q" should close help
+	qMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	updated, _ = m.Update(qMsg)
+	m = updated.(keyhints.Model)
+
+	if m.ShowingHelp() {
+		t.Error("ShowingHelp() = true after q with custom CloseHelp=q, want false")
+	}
+}
+
+func TestModel_KeyMap_ReturnsCurrentKeyMap(t *testing.T) {
+	customKm := keyhints.DefaultKeyMap()
+	customKm.ToggleHelp = keyhints.NewKeyBinding("F1", "Help", "f1")
+
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithKeyMap(customKm))
+	km := m.KeyMap()
+
+	if km.ToggleHelp.Display != "F1" {
+		t.Errorf("KeyMap().ToggleHelp.Display = %q, want %q", km.ToggleHelp.Display, "F1")
+	}
+}
+
+func TestNew_UsesDefaultKeyMap(t *testing.T) {
+	bindings := []keyhints.Binding{{Key: "Enter", Desc: "Submit"}}
+	m := keyhints.New(keyhints.WithBindings(bindings...))
+	km := m.KeyMap()
+
+	// Verify default keymap is applied
+	questionMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	if !km.ToggleHelp.Matches(questionMsg) {
+		t.Error("New model should use default KeyMap with ? for ToggleHelp")
+	}
+}
