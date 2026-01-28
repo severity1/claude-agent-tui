@@ -67,6 +67,7 @@ type Model struct {
 	expanded         bool // whether all bindings are visible in inline view
 	defaultVisible   int  // number of bindings to show when collapsed
 	showHelp         bool // whether to show the help window
+	keyMap           KeyMap
 
 	// Background color for help content
 	contentBg lipgloss.TerminalColor
@@ -108,6 +109,7 @@ func New(opts ...Option) Model {
 		defaultVisible: DefaultVisibleCount,
 		contentBg:      defaults.ContentBg,
 		helpMode:       HelpModeDown, // default: expand downward
+		keyMap:         DefaultKeyMap(),
 
 		// Border defaults - use NewBorderConfig for consistent construction
 		border: styles.NewBorderConfig(
@@ -319,6 +321,19 @@ func WithStyles(s Styles) Option {
 	}
 }
 
+// WithKeyMap sets a custom KeyMap for the component.
+// Use DefaultKeyMap() as a starting point and customize individual bindings.
+func WithKeyMap(km KeyMap) Option {
+	return func(m *Model) {
+		m.keyMap = km
+	}
+}
+
+// KeyMap returns the current keybindings for the component.
+func (m Model) KeyMap() KeyMap {
+	return m.keyMap
+}
+
 // WithAnimation enables/disables physics animation for help window expansion.
 // Default is false (no animation). When enabled, respects REDUCE_MOTION env var.
 // Animation is skipped for HelpModeCenter (instant show/hide for floating modal).
@@ -521,14 +536,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.Focused() {
 			return m, nil
 		}
-		switch msg.String() {
-		case "?":
+		switch {
+		case m.keyMap.ToggleHelp.Matches(msg):
 			m.ToggleHelp()
 			// Start animation tick if animating
 			if m.animating {
 				return m, heightTick()
 			}
-		case "esc":
+		case m.keyMap.CloseHelp.Matches(msg):
 			if m.showHelp || m.animating {
 				m.HideHelp()
 				if m.animating {

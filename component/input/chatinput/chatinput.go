@@ -73,6 +73,7 @@ type Model struct {
 	infoStyle          lipgloss.Style // style for info bar
 	flashing           bool           // true during copy flash animation
 	placeholder        string         // placeholder text (rendered by us, not bubbles textarea)
+	keyMap             KeyMap         // configurable keybindings
 
 	// Visual styling options
 	contentBg        lipgloss.TerminalColor // background color for all content inside borders
@@ -141,6 +142,7 @@ func New(opts ...Option) Model {
 		maxHeight:          10, // reasonable scroll point
 		modeStyle:          defaults.ModeStyle,
 		infoStyle:          defaults.InfoStyle,
+		keyMap:             DefaultKeyMap(),
 		// Visual styling defaults
 		contentBg: defaults.ContentBg,
 		border: styles.NewBorderConfig(
@@ -398,6 +400,19 @@ func WithStyles(s Styles) Option {
 	}
 }
 
+// WithKeyMap sets a custom KeyMap for the component.
+// Use DefaultKeyMap() as a starting point and customize individual bindings.
+func WithKeyMap(km KeyMap) Option {
+	return func(m *Model) {
+		m.keyMap = km
+	}
+}
+
+// KeyMap returns the current keybindings for the component.
+func (m Model) KeyMap() KeyMap {
+	return m.keyMap
+}
+
 // Focus sets the focused state and returns a command for cursor blink.
 // Overrides embedded focus.State.Focus() to also delegate to textarea.
 func (m *Model) Focus() tea.Cmd {
@@ -549,30 +564,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKeyMsg processes key messages. Returns (handled, cmd).
+// Uses configurable keyMap for key matching via key.Matches().
 func (m *Model) handleKeyMsg(msg tea.KeyMsg) (bool, tea.Cmd) {
+	// Check InsertNewline before Submit since Alt+Enter contains Enter
 	switch {
-	case msg.Type == tea.KeyEnter && !msg.Alt:
-		return true, m.handleSubmit()
-
-	case msg.Type == tea.KeyEnter && msg.Alt, msg.Type == tea.KeyCtrlJ:
+	case m.keyMap.InsertNewline.Matches(msg):
 		m.textarea.SetValue(m.textarea.Value() + "\n")
 		return true, nil
 
-	case msg.Type == tea.KeyEsc:
+	case m.keyMap.Submit.Matches(msg):
+		return true, m.handleSubmit()
+
+	case m.keyMap.Clear.Matches(msg):
 		m.textarea.SetValue("")
 		m.historyIdx = -1
 		return true, nil
 
-	case msg.Type == tea.KeyUp:
+	case m.keyMap.HistoryPrev.Matches(msg):
 		m.historyUp()
 		return true, nil
 
-	case msg.Type == tea.KeyDown:
+	case m.keyMap.HistoryNext.Matches(msg):
 		m.historyDown()
 		return true, nil
 
-	case msg.Type == tea.KeyCtrlY, msg.String() == "ctrl+shift+c":
-		// Ctrl+Y (reliable, traditional Unix "yank") or Ctrl+Shift+C (if terminal supports it)
+	case m.keyMap.Copy.Matches(msg):
 		return true, m.CopyCmd()
 	}
 	return false, nil
