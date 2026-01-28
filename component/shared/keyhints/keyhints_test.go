@@ -14,10 +14,9 @@ import (
 // ============================================================================
 
 func TestNew_DefaultValues(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+	)
 
 	if len(m.Bindings()) != 1 {
 		t.Errorf("Bindings() length = %d, want 1", len(m.Bindings()))
@@ -25,7 +24,7 @@ func TestNew_DefaultValues(t *testing.T) {
 }
 
 func TestNew_EmptyBindings(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	if len(m.Bindings()) != 0 {
 		t.Errorf("Bindings() length = %d, want 0", len(m.Bindings()))
@@ -33,11 +32,13 @@ func TestNew_EmptyBindings(t *testing.T) {
 }
 
 func TestNew_WithSeparator(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-		{Key: "Esc", Desc: "Clear"},
-	}
-	m := keyhints.New(bindings, keyhints.WithSeparator(" - "))
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "Enter", Desc: "Submit"},
+			keyhints.Binding{Key: "Esc", Desc: "Clear"},
+		),
+		keyhints.WithSeparator(" - "),
+	)
 
 	view := m.View()
 	if !strings.Contains(view, " - ") {
@@ -46,10 +47,10 @@ func TestNew_WithSeparator(t *testing.T) {
 }
 
 func TestNew_WithWidth(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings, keyhints.WithWidth(80))
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+		keyhints.WithWidth(80),
+	)
 
 	// Width is stored internally, just verify model created
 	if len(m.Bindings()) != 1 {
@@ -62,7 +63,7 @@ func TestNew_WithWidth(t *testing.T) {
 // ============================================================================
 
 func TestModel_SetBindings(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	newBindings := []keyhints.Binding{
 		{Key: "q", Desc: "Quit"},
@@ -76,10 +77,9 @@ func TestModel_SetBindings(t *testing.T) {
 }
 
 func TestModel_AddBinding(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+	)
 
 	m.AddBinding(keyhints.Binding{Key: "Esc", Desc: "Clear"})
 
@@ -89,10 +89,9 @@ func TestModel_AddBinding(t *testing.T) {
 }
 
 func TestModel_Bindings_ReturnsCopy(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+	)
 
 	result := m.Bindings()
 	if len(result) != 1 {
@@ -121,7 +120,7 @@ func TestModel_Bindings_ReturnsCopy(t *testing.T) {
 // ============================================================================
 
 func TestModel_View_EmptyBindings(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	view := m.View()
 	if view != "" {
@@ -130,10 +129,9 @@ func TestModel_View_EmptyBindings(t *testing.T) {
 }
 
 func TestModel_View_SingleBinding(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+	)
 
 	view := m.View()
 	if !strings.Contains(view, "Enter") {
@@ -145,12 +143,13 @@ func TestModel_View_SingleBinding(t *testing.T) {
 }
 
 func TestModel_View_MultipleBindings(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-		{Key: "Esc", Desc: "Clear"},
-		{Key: "Ctrl+C", Desc: "Quit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "Enter", Desc: "Submit"},
+			keyhints.Binding{Key: "Esc", Desc: "Clear"},
+			keyhints.Binding{Key: "Ctrl+C", Desc: "Quit"},
+		),
+	)
 
 	view := m.View()
 	if !strings.Contains(view, "Enter") {
@@ -169,7 +168,7 @@ func TestModel_View_MultipleBindings(t *testing.T) {
 }
 
 func TestModel_ViewCompact_Empty(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	view := m.ViewCompact()
 	if view != "" {
@@ -178,11 +177,12 @@ func TestModel_ViewCompact_Empty(t *testing.T) {
 }
 
 func TestModel_ViewCompact_ShowsKeysOnly(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-		{Key: "Esc", Desc: "Clear"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "Enter", Desc: "Submit"},
+			keyhints.Binding{Key: "Esc", Desc: "Clear"},
+		),
+	)
 
 	view := m.ViewCompact()
 	if !strings.Contains(view, "Enter") {
@@ -202,11 +202,11 @@ func TestModel_ViewCompact_ShowsKeysOnly(t *testing.T) {
 // ============================================================================
 
 func TestNew_WithKeyStyle(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	m := keyhints.New(bindings, keyhints.WithKeyStyle(style))
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+		keyhints.WithKeyStyle(style),
+	)
 
 	// Style is internal, verify model works
 	view := m.View()
@@ -216,11 +216,11 @@ func TestNew_WithKeyStyle(t *testing.T) {
 }
 
 func TestNew_WithDescStyle(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
 	style := lipgloss.NewStyle().Faint(true)
-	m := keyhints.New(bindings, keyhints.WithDescStyle(style))
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+		keyhints.WithDescStyle(style),
+	)
 
 	view := m.View()
 	if !strings.Contains(view, "Submit") {
@@ -229,12 +229,14 @@ func TestNew_WithDescStyle(t *testing.T) {
 }
 
 func TestNew_WithSepStyle(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-		{Key: "b", Desc: "B"},
-	}
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	m := keyhints.New(bindings, keyhints.WithSepStyle(style))
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "a", Desc: "A"},
+			keyhints.Binding{Key: "b", Desc: "B"},
+		),
+		keyhints.WithSepStyle(style),
+	)
 
 	view := m.View()
 	if !strings.Contains(view, "|") {
@@ -247,11 +249,12 @@ func TestNew_WithSepStyle(t *testing.T) {
 // ============================================================================
 
 func TestNew_DefaultExpanded(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-		{Key: "b", Desc: "B"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "a", Desc: "A"},
+			keyhints.Binding{Key: "b", Desc: "B"},
+		),
+	)
 
 	if !m.Expanded() {
 		t.Error("New() should create expanded model by default")
@@ -259,10 +262,10 @@ func TestNew_DefaultExpanded(t *testing.T) {
 }
 
 func TestNew_WithCollapsed(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings, keyhints.WithCollapsed())
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "a", Desc: "A"}),
+		keyhints.WithCollapsed(),
+	)
 
 	if m.Expanded() {
 		t.Error("WithCollapsed() should create collapsed model")
@@ -270,14 +273,17 @@ func TestNew_WithCollapsed(t *testing.T) {
 }
 
 func TestNew_WithDefaultVisible(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-		{Key: "b", Desc: "B"},
-		{Key: "c", Desc: "C"},
-		{Key: "d", Desc: "D"},
-		{Key: "e", Desc: "E"},
-	}
-	m := keyhints.New(bindings, keyhints.WithCollapsed(), keyhints.WithDefaultVisible(2))
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "a", Desc: "A"},
+			keyhints.Binding{Key: "b", Desc: "B"},
+			keyhints.Binding{Key: "c", Desc: "C"},
+			keyhints.Binding{Key: "d", Desc: "D"},
+			keyhints.Binding{Key: "e", Desc: "E"},
+		),
+		keyhints.WithCollapsed(),
+		keyhints.WithDefaultVisible(2),
+	)
 
 	view := m.View()
 	// Should show first 2 bindings
@@ -298,14 +304,17 @@ func TestNew_WithDefaultVisible(t *testing.T) {
 }
 
 func TestNew_WithDefaultVisible_InvalidValue(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-		{Key: "b", Desc: "B"},
-		{Key: "c", Desc: "C"},
-		{Key: "d", Desc: "D"},
-	}
 	// Zero should use default (3)
-	m := keyhints.New(bindings, keyhints.WithCollapsed(), keyhints.WithDefaultVisible(0))
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "a", Desc: "A"},
+			keyhints.Binding{Key: "b", Desc: "B"},
+			keyhints.Binding{Key: "c", Desc: "C"},
+			keyhints.Binding{Key: "d", Desc: "D"},
+		),
+		keyhints.WithCollapsed(),
+		keyhints.WithDefaultVisible(0),
+	)
 
 	view := m.View()
 	// Should show 3 bindings (default)
@@ -325,7 +334,7 @@ func TestNew_WithDefaultVisible_InvalidValue(t *testing.T) {
 }
 
 func TestModel_ToggleExpanded(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	// Initially expanded
 	if !m.Expanded() {
@@ -346,7 +355,7 @@ func TestModel_ToggleExpanded(t *testing.T) {
 }
 
 func TestModel_SetExpanded(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	m.SetExpanded(false)
 	if m.Expanded() {
@@ -360,10 +369,10 @@ func TestModel_SetExpanded(t *testing.T) {
 }
 
 func TestModel_SetWidth(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "Action A"},
-	}
-	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeDown))
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "a", Desc: "Action A"}),
+		keyhints.WithHelpMode(keyhints.HelpModeDown),
+	)
 
 	// Initially no width set
 	view1 := m.ViewHelp()
@@ -386,14 +395,16 @@ func TestModel_SetWidth(t *testing.T) {
 }
 
 func TestModel_View_Collapsed_ShowsLimitedBindings(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-		{Key: "Esc", Desc: "Clear"},
-		{Key: "Tab", Desc: "Next"},
-		{Key: "Shift+Tab", Desc: "Prev"},
-		{Key: "Ctrl+C", Desc: "Quit"},
-	}
-	m := keyhints.New(bindings, keyhints.WithCollapsed())
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "Enter", Desc: "Submit"},
+			keyhints.Binding{Key: "Esc", Desc: "Clear"},
+			keyhints.Binding{Key: "Tab", Desc: "Next"},
+			keyhints.Binding{Key: "Shift+Tab", Desc: "Prev"},
+			keyhints.Binding{Key: "Ctrl+C", Desc: "Quit"},
+		),
+		keyhints.WithCollapsed(),
+	)
 
 	view := m.View()
 	// Default visible is 3
@@ -417,12 +428,14 @@ func TestModel_View_Collapsed_ShowsLimitedBindings(t *testing.T) {
 }
 
 func TestModel_View_Collapsed_NoIndicatorWhenAllVisible(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-		{Key: "Esc", Desc: "Clear"},
-	}
 	// Only 2 bindings, default visible is 3
-	m := keyhints.New(bindings, keyhints.WithCollapsed())
+	m := keyhints.New(
+		keyhints.WithBindings(
+			keyhints.Binding{Key: "Enter", Desc: "Submit"},
+			keyhints.Binding{Key: "Esc", Desc: "Clear"},
+		),
+		keyhints.WithCollapsed(),
+	)
 
 	view := m.View()
 	if strings.Contains(view, "more") {
@@ -438,7 +451,7 @@ func TestModel_View_Expanded_ShowsAllBindings(t *testing.T) {
 		{Key: "d", Desc: "D"},
 		{Key: "e", Desc: "E"},
 	}
-	m := keyhints.New(bindings) // Default is expanded
+	m := keyhints.New(keyhints.WithBindings(bindings...)) // Default is expanded
 
 	view := m.View()
 	for _, b := range bindings {
@@ -457,7 +470,7 @@ func TestModel_View_Expanded_ShowsAllBindings(t *testing.T) {
 // ============================================================================
 
 func TestModel_Init_ReturnsNil(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 	cmd := m.Init()
 
 	if cmd != nil {
@@ -466,7 +479,7 @@ func TestModel_Init_ReturnsNil(t *testing.T) {
 }
 
 func TestModel_Update_ReturnsModelAndNil(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	updated, cmd := m.Update(nil)
 
@@ -483,7 +496,7 @@ func TestModel_Update_ReturnsModelAndNil(t *testing.T) {
 // ============================================================================
 
 func TestNew_DefaultNotFocused(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	if m.Focused() {
 		t.Error("New() should create unfocused model by default")
@@ -491,7 +504,7 @@ func TestNew_DefaultNotFocused(t *testing.T) {
 }
 
 func TestModel_Focus(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	cmd := m.Focus()
 
@@ -504,7 +517,7 @@ func TestModel_Focus(t *testing.T) {
 }
 
 func TestModel_Blur(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 	m.Focus()
 
 	m.Blur()
@@ -515,10 +528,9 @@ func TestModel_Blur(t *testing.T) {
 }
 
 func TestModel_View_FocusedShowsBorder(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+	)
 	m.Focus()
 
 	view := m.View()
@@ -529,10 +541,9 @@ func TestModel_View_FocusedShowsBorder(t *testing.T) {
 }
 
 func TestModel_View_UnfocusedHasBorder(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+	)
 	// Not focused by default
 
 	view := m.View()
@@ -543,10 +554,9 @@ func TestModel_View_UnfocusedHasBorder(t *testing.T) {
 }
 
 func TestModel_Update_FocusedHandlesQuestionMark(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "a", Desc: "A"}),
+	)
 	m.Focus()
 
 	// Initial state: help not showing
@@ -566,10 +576,9 @@ func TestModel_Update_FocusedHandlesQuestionMark(t *testing.T) {
 }
 
 func TestModel_Update_UnfocusedIgnoresQuestionMark(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "a", Desc: "A"}),
+	)
 	// Not focused
 
 	// Initial state: help not showing
@@ -589,11 +598,11 @@ func TestModel_Update_UnfocusedIgnoresQuestionMark(t *testing.T) {
 }
 
 func TestNew_WithFocusStyle(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "Enter", Desc: "Submit"},
-	}
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
-	m := keyhints.New(bindings, keyhints.WithFocusStyle(style))
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "Enter", Desc: "Submit"}),
+		keyhints.WithFocusStyle(style),
+	)
 	m.Focus()
 
 	view := m.View()
@@ -608,7 +617,7 @@ func TestNew_WithFocusStyle(t *testing.T) {
 // ============================================================================
 
 func TestNew_DefaultHelpHidden(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	if m.ShowingHelp() {
 		t.Error("New() should create model with help hidden")
@@ -616,7 +625,7 @@ func TestNew_DefaultHelpHidden(t *testing.T) {
 }
 
 func TestModel_ShowHelp(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	m.ShowHelp()
 
@@ -626,7 +635,7 @@ func TestModel_ShowHelp(t *testing.T) {
 }
 
 func TestModel_HideHelp(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 	m.ShowHelp()
 
 	m.HideHelp()
@@ -637,7 +646,7 @@ func TestModel_HideHelp(t *testing.T) {
 }
 
 func TestModel_ToggleHelp(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	m.ToggleHelp()
 	if !m.ShowingHelp() {
@@ -651,7 +660,7 @@ func TestModel_ToggleHelp(t *testing.T) {
 }
 
 func TestModel_ViewHelp_EmptyBindings(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	view := m.ViewHelp()
 	if !strings.Contains(view, "No keybindings") {
@@ -665,7 +674,7 @@ func TestModel_ViewHelp_ShowsAllBindings(t *testing.T) {
 		{Key: "Esc", Desc: "Clear"},
 		{Key: "Ctrl+C", Desc: "Quit"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	view := m.ViewHelp()
 	for _, b := range bindings {
@@ -679,10 +688,9 @@ func TestModel_ViewHelp_ShowsAllBindings(t *testing.T) {
 }
 
 func TestModel_ViewHelp_HasTitle(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "a", Desc: "A"}),
+	)
 
 	view := m.ViewHelp()
 	if !strings.Contains(view, "Keyboard Shortcuts") {
@@ -691,10 +699,9 @@ func TestModel_ViewHelp_HasTitle(t *testing.T) {
 }
 
 func TestModel_ViewHelp_HasCloseHint(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(
+		keyhints.WithBindings(keyhints.Binding{Key: "a", Desc: "A"}),
+	)
 
 	view := m.ViewHelp()
 	if !strings.Contains(view, "Esc") {
@@ -703,7 +710,7 @@ func TestModel_ViewHelp_HasCloseHint(t *testing.T) {
 }
 
 func TestModel_Update_EscClosesHelp(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 	m.Focus()
 	m.ShowHelp()
 
@@ -722,7 +729,7 @@ func TestNew_WithHelpStyle(t *testing.T) {
 		{Key: "Enter", Desc: "Submit"},
 	}
 	style := lipgloss.NewStyle().Border(lipgloss.DoubleBorder())
-	m := keyhints.New(bindings, keyhints.WithHelpStyle(style))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithHelpStyle(style))
 
 	view := m.ViewHelp()
 	// Just verify it renders without error
@@ -743,7 +750,7 @@ func TestModel_View_WithWidth_TruncatesWhenNeeded(t *testing.T) {
 		{Key: "Ctrl+C", Desc: "Quit"},
 	}
 	// Set a narrow width that can't fit all bindings
-	m := keyhints.New(bindings, keyhints.WithWidth(40))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(40))
 
 	view := m.View()
 	// Should show truncation indicator
@@ -758,7 +765,7 @@ func TestModel_View_WithWidth_ShowsAllWhenFits(t *testing.T) {
 		{Key: "b", Desc: "B"},
 	}
 	// Set a wide width that can fit all bindings
-	m := keyhints.New(bindings, keyhints.WithWidth(200))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(200))
 
 	view := m.View()
 	// Should NOT show truncation indicator
@@ -781,7 +788,7 @@ func TestModel_View_WithWidth_UsesPlusFormat(t *testing.T) {
 		{Key: "Tab", Desc: "Next field"},
 	}
 	// Set a narrow width
-	m := keyhints.New(bindings, keyhints.WithWidth(50))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(50))
 
 	view := m.View()
 	// Width-based truncation uses "+N more" format
@@ -795,7 +802,7 @@ func TestModel_View_WithWidth_UsesPlusFormat(t *testing.T) {
 // ============================================================================
 
 func TestModel_SetBindings_ClonesInput(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	original := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
@@ -821,7 +828,7 @@ func TestNew_DefaultPadding(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	view := m.View()
 	// Default padding is empty string, view starts with border character
@@ -834,7 +841,7 @@ func TestNew_WithPadding(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding("   ")) // 3 spaces
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithPadding("   ")) // 3 spaces
 
 	view := m.View()
 	// Padding is applied inside the border, so content should contain the padding followed by key
@@ -847,7 +854,7 @@ func TestNew_WithPadding_Empty(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "Enter", Desc: "Submit"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding("")) // no padding
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithPadding("")) // no padding
 
 	view := m.View()
 	// Should contain border and content
@@ -860,7 +867,7 @@ func TestModel_View_AppliesPadding(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithPadding(">>"))
 
 	view := m.View()
 	// Padding is applied inside the border
@@ -874,7 +881,7 @@ func TestModel_ViewCompact_AppliesPadding(t *testing.T) {
 		{Key: "a", Desc: "A"},
 		{Key: "b", Desc: "B"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding(">>"))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithPadding(">>"))
 
 	view := m.ViewCompact()
 	// Padding is applied, ViewCompact does not use border wrapper
@@ -888,7 +895,7 @@ func TestModel_ViewHelp_NoPadding(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding(">>"), keyhints.WithBorderLeft(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithPadding(">>"), keyhints.WithBorderLeft(true))
 
 	view := m.ViewHelp()
 	// Should NOT start with padding - should start with left border
@@ -905,7 +912,7 @@ func TestModel_View_FocusedWithPadding(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithPadding("  ")) // 2 spaces
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithPadding("  ")) // 2 spaces
 	m.Focus()
 
 	view := m.View()
@@ -921,7 +928,7 @@ func TestModel_View_FocusedWithPadding(t *testing.T) {
 
 func TestModel_ViewCompact_EmptyWithPadding(t *testing.T) {
 	// Empty bindings should return empty string regardless of padding
-	m := keyhints.New(nil, keyhints.WithPadding(">>"))
+	m := keyhints.New(keyhints.WithPadding(">>"))
 
 	view := m.ViewCompact()
 	if view != "" {
@@ -931,7 +938,7 @@ func TestModel_ViewCompact_EmptyWithPadding(t *testing.T) {
 
 func TestModel_View_EmptyWithPadding(t *testing.T) {
 	// Empty bindings should return empty string regardless of padding
-	m := keyhints.New(nil, keyhints.WithPadding(">>"))
+	m := keyhints.New(keyhints.WithPadding(">>"))
 
 	view := m.View()
 	if view != "" {
@@ -949,7 +956,7 @@ func TestNew_WithWidth_ZeroValue(t *testing.T) {
 		{Key: "Esc", Desc: "Clear"},
 	}
 	// WithWidth(0) should effectively disable width constraint
-	m := keyhints.New(bindings, keyhints.WithWidth(0))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(0))
 
 	view := m.View()
 	// Should render all bindings without truncation when width is 0
@@ -970,7 +977,7 @@ func TestNew_WithWidth_ZeroValue(t *testing.T) {
 // ============================================================================
 
 func TestNew_DefaultHelpMode(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	if m.HelpMode() != keyhints.HelpModeDown {
 		t.Errorf("Default HelpMode() = %v, want HelpModeDown (0)", m.HelpMode())
@@ -991,7 +998,7 @@ func TestNew_WithHelpMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := keyhints.New(nil, keyhints.WithHelpMode(tt.mode))
+			m := keyhints.New(keyhints.WithHelpMode(tt.mode))
 			if m.HelpMode() != tt.expected {
 				t.Errorf("HelpMode() = %v, want %v", m.HelpMode(), tt.expected)
 			}
@@ -1004,7 +1011,7 @@ func TestNew_WithHelpMode(t *testing.T) {
 // ============================================================================
 
 func TestModel_HelpHeight_EmptyBindings(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	height := m.HelpHeight()
 	// Empty bindings shows "No keybindings defined" which is 1 line
@@ -1019,7 +1026,7 @@ func TestModel_HelpHeight_WithBindings(t *testing.T) {
 		{Key: "b", Desc: "B"},
 		{Key: "c", Desc: "C"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	height := m.HelpHeight()
 	// Title (1) + blank (1) + bindings (3) + blank (1) + close hint (1) = 7
@@ -1037,7 +1044,7 @@ func TestModel_ViewHelp_HasLeftBorder(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	view := m.ViewHelp()
 	// Should contain thick left border character
@@ -1050,7 +1057,7 @@ func TestModel_ViewHelp_NoFullBorder(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	view := m.ViewHelp()
 	// Should NOT contain rounded border characters
@@ -1071,7 +1078,7 @@ func TestNew_WithContentBackground(t *testing.T) {
 		{Key: "a", Desc: "A"},
 	}
 	bgColor := lipgloss.Color("236")
-	m := keyhints.New(bindings, keyhints.WithContentBackground(bgColor))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithContentBackground(bgColor))
 
 	// Just verify it renders without error
 	view := m.ViewHelp()
@@ -1088,7 +1095,7 @@ func TestModel_View_WithContentBackground(t *testing.T) {
 		{Key: "a", Desc: "A"},
 	}
 	bgColor := lipgloss.Color("236")
-	m := keyhints.New(bindings, keyhints.WithContentBackground(bgColor))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithContentBackground(bgColor))
 
 	view := m.View()
 
@@ -1117,7 +1124,7 @@ func TestModel_ViewHelp_WithContentBackground_AttachedModes(t *testing.T) {
 				{Key: "a", Desc: "Action A"},
 			}
 			bgColor := lipgloss.Color("236")
-			m := keyhints.New(bindings,
+			m := keyhints.New(keyhints.WithBindings(bindings...),
 				keyhints.WithContentBackground(bgColor),
 				keyhints.WithHelpMode(mode),
 				keyhints.WithWidth(50),
@@ -1146,7 +1153,7 @@ func TestModel_ViewHelp_WithContentBackground_CenterMode(t *testing.T) {
 		{Key: "a", Desc: "Action A"},
 	}
 	bgColor := lipgloss.Color("236")
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithContentBackground(bgColor),
 		keyhints.WithHelpMode(keyhints.HelpModeCenter),
 	)
@@ -1168,7 +1175,7 @@ func TestModel_ViewHelp_NoContentBackground(t *testing.T) {
 		{Key: "a", Desc: "A"},
 	}
 	// Explicitly set nil background
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithContentBackground(nil),
 		keyhints.WithHelpMode(keyhints.HelpModeDown),
 	)
@@ -1194,7 +1201,7 @@ func TestModel_ViewHelp_DownMode_MatchesBarWidth(t *testing.T) {
 		{Key: "b", Desc: "Action B"},
 	}
 	width := 60
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithWidth(width),
 		keyhints.WithHelpMode(keyhints.HelpModeDown),
 	)
@@ -1216,7 +1223,7 @@ func TestModel_ViewHelp_UpMode_MatchesBarWidth(t *testing.T) {
 		{Key: "a", Desc: "Action A"},
 	}
 	width := 50
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithWidth(width),
 		keyhints.WithHelpMode(keyhints.HelpModeUp),
 	)
@@ -1237,7 +1244,7 @@ func TestModel_ViewHelp_TopMode_MatchesBarWidth(t *testing.T) {
 		{Key: "a", Desc: "Action A"},
 	}
 	width := 50
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithWidth(width),
 		keyhints.WithHelpMode(keyhints.HelpModeTop),
 	)
@@ -1258,7 +1265,7 @@ func TestModel_ViewHelp_CenterMode_UsesContentWidth(t *testing.T) {
 		{Key: "a", Desc: "Action A"},
 	}
 	// Set a narrow width that would truncate content if applied
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithWidth(20),
 		keyhints.WithHelpMode(keyhints.HelpModeCenter),
 	)
@@ -1278,7 +1285,7 @@ func TestModel_ViewHelp_ZeroWidth_NoConstraint(t *testing.T) {
 		{Key: "Enter", Desc: "Submit the form"},
 	}
 	// Width 0 should not apply any constraint
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithWidth(0),
 		keyhints.WithHelpMode(keyhints.HelpModeDown),
 	)
@@ -1291,7 +1298,7 @@ func TestModel_ViewHelp_ZeroWidth_NoConstraint(t *testing.T) {
 }
 
 func TestModel_ViewHelp_EmptyBindings_WithWidth(t *testing.T) {
-	m := keyhints.New(nil,
+	m := keyhints.New(
 		keyhints.WithWidth(40),
 		keyhints.WithHelpMode(keyhints.HelpModeDown),
 	)
@@ -1325,7 +1332,7 @@ func TestModel_ViewHelp_AllAttachedModes_ApplyWidth(t *testing.T) {
 
 	for _, mode := range attachedModes {
 		t.Run(modeToString(mode), func(t *testing.T) {
-			m := keyhints.New(bindings,
+			m := keyhints.New(keyhints.WithBindings(bindings...),
 				keyhints.WithWidth(width),
 				keyhints.WithHelpMode(mode),
 			)
@@ -1369,7 +1376,7 @@ func TestModel_View_WithWidth_AppliesWidthStyle(t *testing.T) {
 		{Key: "b", Desc: "B"},
 	}
 	width := 80
-	m := keyhints.New(bindings, keyhints.WithWidth(width))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(width))
 
 	view := m.View()
 	viewWidth := lipgloss.Width(view)
@@ -1388,7 +1395,7 @@ func TestModel_View_WithWidth_ZeroDoesNotApplyStyle(t *testing.T) {
 		{Key: "a", Desc: "A"},
 	}
 	// Width 0 should not apply width style
-	m := keyhints.New(bindings, keyhints.WithWidth(0))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(0))
 
 	view := m.View()
 	// Just verify it renders without crashing
@@ -1403,7 +1410,7 @@ func TestModel_View_ViewHelp_ConsistentWidth(t *testing.T) {
 		{Key: "b", Desc: "Action B"},
 	}
 	width := 60
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithWidth(width),
 		keyhints.WithHelpMode(keyhints.HelpModeDown),
 	)
@@ -1430,7 +1437,7 @@ func TestModel_View_SetWidth_UpdatesRendering(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithWidth(50))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(50))
 
 	view1 := m.View()
 	width1 := lipgloss.Width(view1)
@@ -1457,7 +1464,7 @@ func TestNew_DefaultBorderLeft(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	view := m.View()
 	// Default borderLeft is true, so left border should be visible (thick border character)
@@ -1470,7 +1477,7 @@ func TestNew_DefaultBorderRight(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithWidth(40))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(40))
 
 	view := m.View()
 	lines := strings.Split(view, "\n")
@@ -1488,7 +1495,7 @@ func TestNew_WithBorderLeft_True(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithBorderLeft(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithBorderLeft(true))
 
 	view := m.View()
 	// borderLeft=true should show visible thick border
@@ -1501,7 +1508,7 @@ func TestNew_WithBorderLeft_False(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithBorderLeft(false))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithBorderLeft(false))
 
 	view := m.View()
 	// borderLeft=false should hide left border (use space)
@@ -1514,7 +1521,7 @@ func TestModel_View_BothBordersHidden(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithBorderLeft(false),
 		keyhints.WithBorderRight(false),
 		keyhints.WithWidth(40),
@@ -1537,7 +1544,7 @@ func TestModel_ViewHelp_BorderVisibility(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithBorderLeft(false),
 		keyhints.WithBorderRight(true),
 		keyhints.WithHelpMode(keyhints.HelpModeDown),
@@ -1567,9 +1574,9 @@ func TestModel_ViewHelp_BorderVisibility(t *testing.T) {
 // ============================================================================
 
 func TestNew_DefaultAnimationDisabled(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("New() should create model with animation not in progress")
 	}
 }
@@ -1578,10 +1585,10 @@ func TestNew_WithAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	// Animation is enabled but not yet in progress
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("WithAnimation(true) should not start animation immediately")
 	}
 }
@@ -1591,12 +1598,12 @@ func TestNew_WithAnimationSpring(t *testing.T) {
 		{Key: "a", Desc: "A"},
 	}
 	// Should not panic with custom spring parameters
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithAnimation(true),
 		keyhints.WithAnimationSpring(8.0, 0.5),
 	)
 
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("WithAnimationSpring should not start animation")
 	}
 }
@@ -1605,11 +1612,11 @@ func TestModel_ShowHelp_WithAnimation_StartsAnimating(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	m.ShowHelp()
 
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("ShowHelp() with animation enabled should start animation")
 	}
 	if !m.ShowingHelp() {
@@ -1621,21 +1628,21 @@ func TestModel_HideHelp_WithAnimation_StartsAnimating(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	m.ShowHelp()
 	// Manually stop animation for testing
 	for i := 0; i < 100; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
 
 	m.HideHelp()
 
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("HideHelp() with animation enabled should start animation")
 	}
 	// showHelp should still be true until animation completes
@@ -1648,11 +1655,11 @@ func TestModel_ShowHelp_WithoutAnimation_NoAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings) // No animation
+	m := keyhints.New(keyhints.WithBindings(bindings...)) // No animation
 
 	m.ShowHelp()
 
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("ShowHelp() without animation enabled should not animate")
 	}
 	if !m.ShowingHelp() {
@@ -1664,7 +1671,7 @@ func TestModel_AnimationCmd_WhenAnimating(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	m.ShowHelp()
 
@@ -1678,7 +1685,7 @@ func TestModel_AnimationCmd_WhenNotAnimating(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	// Not animating yet
 	cmd := m.AnimationCmd()
@@ -1691,7 +1698,7 @@ func TestModel_AnimatedHelpHeight_NoAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings) // No animation
+	m := keyhints.New(keyhints.WithBindings(bindings...)) // No animation
 
 	// Not showing help
 	height := m.AnimatedHelpHeight()
@@ -1712,7 +1719,7 @@ func TestModel_AnimatedHelpHeight_WithAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	m.ShowHelp()
 
@@ -1727,7 +1734,7 @@ func TestModel_ViewHelpPartial_ZeroLines(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	result := m.ViewHelpPartial(0)
 	if result != "" {
@@ -1739,7 +1746,7 @@ func TestModel_ViewHelpPartial_NegativeLines(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	result := m.ViewHelpPartial(-1)
 	if result != "" {
@@ -1751,7 +1758,7 @@ func TestModel_ViewHelpPartial_FullContent(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	fullView := m.ViewHelp()
 	lineCount := len(strings.Split(fullView, "\n"))
@@ -1768,7 +1775,7 @@ func TestModel_ViewHelpPartial_TopAnchored_Down(t *testing.T) {
 		{Key: "a", Desc: "A"},
 		{Key: "b", Desc: "B"},
 	}
-	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeDown))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithHelpMode(keyhints.HelpModeDown))
 
 	fullView := m.ViewHelp()
 	lines := strings.Split(fullView, "\n")
@@ -1791,7 +1798,7 @@ func TestModel_ViewHelpPartial_BottomAnchored_Up(t *testing.T) {
 		{Key: "a", Desc: "A"},
 		{Key: "b", Desc: "B"},
 	}
-	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeUp))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithHelpMode(keyhints.HelpModeUp))
 
 	fullView := m.ViewHelp()
 	fullLines := strings.Split(fullView, "\n")
@@ -1818,45 +1825,11 @@ func TestModel_ViewHelpPartial_BottomAnchored_Up(t *testing.T) {
 	}
 }
 
-func TestModel_AnimationPaddingLines(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-
-	t.Run("returns 0 when not animating", func(t *testing.T) {
-		m := keyhints.New(bindings, keyhints.WithAnimation(true), keyhints.WithHelpMode(keyhints.HelpModeUp))
-		// Not animating yet
-		if padding := m.AnimationPaddingLines(); padding != 0 {
-			t.Errorf("AnimationPaddingLines() = %d, want 0 when not animating", padding)
-		}
-	})
-
-	t.Run("returns 0 for non-Up modes", func(t *testing.T) {
-		m := keyhints.New(bindings, keyhints.WithAnimation(true), keyhints.WithHelpMode(keyhints.HelpModeDown))
-		m.ShowHelp()
-		if padding := m.AnimationPaddingLines(); padding != 0 {
-			t.Errorf("AnimationPaddingLines() = %d, want 0 for Down mode", padding)
-		}
-	})
-
-	t.Run("returns correct padding for Up mode animation", func(t *testing.T) {
-		m := keyhints.New(bindings, keyhints.WithAnimation(true), keyhints.WithHelpMode(keyhints.HelpModeUp))
-		m.ShowHelp()
-
-		// During early animation, padding should be > 0
-		padding := m.AnimationPaddingLines()
-		expectedMax := m.HelpHeight()
-		if padding < 0 || padding > expectedMax {
-			t.Errorf("AnimationPaddingLines() = %d, want 0 <= padding <= %d", padding, expectedMax)
-		}
-	})
-}
-
 func TestModel_ViewHelpPartial_TopAnchored_Center(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeCenter))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithHelpMode(keyhints.HelpModeCenter))
 
 	fullView := m.ViewHelp()
 	lines := strings.Split(fullView, "\n")
@@ -1874,7 +1847,7 @@ func TestModel_ViewHelpPartial_TopAnchored_Top(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithHelpMode(keyhints.HelpModeTop))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithHelpMode(keyhints.HelpModeTop))
 
 	fullView := m.ViewHelp()
 	lines := strings.Split(fullView, "\n")
@@ -1888,38 +1861,8 @@ func TestModel_ViewHelpPartial_TopAnchored_Top(t *testing.T) {
 	}
 }
 
-func TestModel_ViewHelpAnimated_NoAnimation(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings) // No animation
-
-	result := m.ViewHelpAnimated()
-	expected := m.ViewHelp()
-
-	if result != expected {
-		t.Error("ViewHelpAnimated() without animation should return ViewHelp()")
-	}
-}
-
-func TestModel_ViewHelpAnimated_WithAnimation(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
-
-	m.ShowHelp()
-
-	// During animation, should return partial content
-	result := m.ViewHelpAnimated()
-	// Just verify it returns something (actual content depends on animation state)
-	if result == "" && m.AnimatedHelpHeight() > 0 {
-		t.Error("ViewHelpAnimated() during animation should return content")
-	}
-}
-
 func TestModel_Update_HeightTickMsg_NotAnimating(t *testing.T) {
-	m := keyhints.New(nil, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithAnimation(true))
 
 	// Not animating
 	updated, cmd := m.Update(keyhints.HeightTickMsg{})
@@ -1936,7 +1879,7 @@ func TestModel_Update_HeightTickMsg_Animating(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	m.ShowHelp()
 
@@ -1945,7 +1888,7 @@ func TestModel_Update_HeightTickMsg_Animating(t *testing.T) {
 	m = updated.(keyhints.Model)
 
 	// Animation should either continue or complete
-	if m.Animating() && cmd == nil {
+	if m.AnimationCmd() != nil && cmd == nil {
 		t.Error("Update(HeightTickMsg) while animating should return tick cmd")
 	}
 }
@@ -1954,7 +1897,7 @@ func TestModel_Update_HeightTickMsg_AnimationCompletes(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	m.ShowHelp()
 
@@ -1962,12 +1905,12 @@ func TestModel_Update_HeightTickMsg_AnimationCompletes(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
 
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("Animation should complete after sufficient ticks")
 	}
 	if !m.ShowingHelp() {
@@ -1979,14 +1922,14 @@ func TestModel_Update_HeightTickMsg_HideAnimationCompletes(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	// Show and wait for animation
 	m.ShowHelp()
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
@@ -1996,12 +1939,12 @@ func TestModel_Update_HeightTickMsg_HideAnimationCompletes(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
 
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("Hide animation should complete after sufficient ticks")
 	}
 	if m.ShowingHelp() {
@@ -2013,7 +1956,7 @@ func TestModel_Update_QuestionMark_WithAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 	m.Focus()
 
 	// Press ? to toggle help
@@ -2024,7 +1967,7 @@ func TestModel_Update_QuestionMark_WithAnimation(t *testing.T) {
 	if !m.ShowingHelp() {
 		t.Error("? key should show help")
 	}
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("? key with animation should start animation")
 	}
 	if cmd == nil {
@@ -2036,7 +1979,7 @@ func TestModel_Update_Esc_WithAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 	m.Focus()
 	m.ShowHelp()
 
@@ -2044,7 +1987,7 @@ func TestModel_Update_Esc_WithAnimation(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
@@ -2054,7 +1997,7 @@ func TestModel_Update_Esc_WithAnimation(t *testing.T) {
 	updated, cmd := m.Update(keyMsg)
 	m = updated.(keyhints.Model)
 
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("Esc key with animation should start hide animation")
 	}
 	if cmd == nil {
@@ -2070,7 +2013,7 @@ func TestModel_ShowHelp_CenterMode_NoAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithAnimation(true),
 		keyhints.WithHelpMode(keyhints.HelpModeCenter),
 	)
@@ -2078,7 +2021,7 @@ func TestModel_ShowHelp_CenterMode_NoAnimation(t *testing.T) {
 	m.ShowHelp()
 
 	// Center mode should skip animation even when enabled
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("ShowHelp() in Center mode should NOT start animation")
 	}
 	if !m.ShowingHelp() {
@@ -2095,7 +2038,7 @@ func TestModel_HideHelp_CenterMode_NoAnimation(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithAnimation(true),
 		keyhints.WithHelpMode(keyhints.HelpModeCenter),
 	)
@@ -2104,31 +2047,11 @@ func TestModel_HideHelp_CenterMode_NoAnimation(t *testing.T) {
 	m.HideHelp()
 
 	// Center mode should skip animation and hide immediately
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("HideHelp() in Center mode should NOT start animation")
 	}
 	if m.ShowingHelp() {
 		t.Error("HideHelp() in Center mode should hide immediately")
-	}
-}
-
-func TestModel_ViewHelpAnimated_CenterMode_ReturnsFullContent(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-	m := keyhints.New(bindings,
-		keyhints.WithAnimation(true),
-		keyhints.WithHelpMode(keyhints.HelpModeCenter),
-	)
-
-	m.ShowHelp()
-
-	// ViewHelpAnimated should return full content for Center mode
-	result := m.ViewHelpAnimated()
-	expected := m.ViewHelp()
-
-	if result != expected {
-		t.Error("ViewHelpAnimated() in Center mode should return full ViewHelp() content")
 	}
 }
 
@@ -2145,14 +2068,14 @@ func TestModel_ShowHelp_NonCenterModes_WithAnimation(t *testing.T) {
 			bindings := []keyhints.Binding{
 				{Key: "a", Desc: "A"},
 			}
-			m := keyhints.New(bindings,
+			m := keyhints.New(keyhints.WithBindings(bindings...),
 				keyhints.WithAnimation(true),
 				keyhints.WithHelpMode(mode),
 			)
 
 			m.ShowHelp()
 
-			if !m.Animating() {
+			if m.AnimationCmd() == nil {
 				t.Errorf("ShowHelp() in %s mode should start animation", modeToString(mode))
 			}
 		})
@@ -2167,14 +2090,14 @@ func TestModel_ShowHelp_ResetsAnimationState(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithAnimation(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithAnimation(true))
 
 	// First show/hide cycle
 	m.ShowHelp()
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
@@ -2182,7 +2105,7 @@ func TestModel_ShowHelp_ResetsAnimationState(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
@@ -2191,7 +2114,7 @@ func TestModel_ShowHelp_ResetsAnimationState(t *testing.T) {
 	m.ShowHelp()
 
 	// Animation should start from 0
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("ShowHelp() should start animation on second show")
 	}
 
@@ -2210,7 +2133,7 @@ func TestNew_WithOverlay(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings, keyhints.WithOverlay(true))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithOverlay(true))
 
 	if !m.Overlay() {
 		t.Error("WithOverlay(true) should enable overlay mode")
@@ -2221,7 +2144,7 @@ func TestNew_WithOverlay_DefaultFalse(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	if m.Overlay() {
 		t.Error("Overlay should be false by default")
@@ -2229,20 +2152,20 @@ func TestNew_WithOverlay_DefaultFalse(t *testing.T) {
 }
 
 func TestModel_Overlay(t *testing.T) {
-	m := keyhints.New(nil, keyhints.WithOverlay(true))
+	m := keyhints.New(keyhints.WithOverlay(true))
 
 	if !m.Overlay() {
 		t.Error("Overlay() should return true when enabled")
 	}
 
-	m2 := keyhints.New(nil, keyhints.WithOverlay(false))
+	m2 := keyhints.New(keyhints.WithOverlay(false))
 	if m2.Overlay() {
 		t.Error("Overlay() should return false when disabled")
 	}
 }
 
 func TestModel_SetOverlay(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	m.SetOverlay(true)
 	if !m.Overlay() {
@@ -2256,7 +2179,7 @@ func TestModel_SetOverlay(t *testing.T) {
 }
 
 func TestModel_ToggleOverlay(t *testing.T) {
-	m := keyhints.New(nil)
+	m := keyhints.New()
 
 	// Default is false
 	if m.Overlay() {
@@ -2276,64 +2199,18 @@ func TestModel_ToggleOverlay(t *testing.T) {
 	}
 }
 
-func TestModel_AnimationPaddingLines_Overlay(t *testing.T) {
-	bindings := []keyhints.Binding{
-		{Key: "a", Desc: "A"},
-	}
-
-	t.Run("returns padding for overlay mode animation", func(t *testing.T) {
-		m := keyhints.New(bindings,
-			keyhints.WithAnimation(true),
-			keyhints.WithOverlay(true),
-			keyhints.WithHelpMode(keyhints.HelpModeDown), // Not Up mode, but overlay
-		)
-		m.ShowHelp()
-
-		// During early animation, padding should be > 0 for overlay mode
-		padding := m.AnimationPaddingLines()
-		expectedMax := m.HelpHeight()
-		if padding < 0 || padding > expectedMax {
-			t.Errorf("AnimationPaddingLines() in overlay mode = %d, want 0 <= padding <= %d",
-				padding, expectedMax)
-		}
-	})
-
-	t.Run("returns 0 when not animating with overlay", func(t *testing.T) {
-		m := keyhints.New(bindings,
-			keyhints.WithAnimation(true),
-			keyhints.WithOverlay(true),
-		)
-		// Not animating yet
-		if padding := m.AnimationPaddingLines(); padding != 0 {
-			t.Errorf("AnimationPaddingLines() = %d, want 0 when not animating", padding)
-		}
-	})
-
-	t.Run("returns 0 for Down mode without overlay", func(t *testing.T) {
-		m := keyhints.New(bindings,
-			keyhints.WithAnimation(true),
-			keyhints.WithOverlay(false),
-			keyhints.WithHelpMode(keyhints.HelpModeDown),
-		)
-		m.ShowHelp()
-		if padding := m.AnimationPaddingLines(); padding != 0 {
-			t.Errorf("AnimationPaddingLines() = %d, want 0 for Down mode without overlay", padding)
-		}
-	})
-}
-
 func TestModel_ShowHelp_Overlay_UsesSnappierSpring(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithAnimation(true),
 		keyhints.WithOverlay(true),
 	)
 
 	m.ShowHelp()
 
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("ShowHelp() with overlay and animation should start animation")
 	}
 	if !m.ShowingHelp() {
@@ -2345,7 +2222,7 @@ func TestModel_HideHelp_Overlay_UsesSnappierSpring(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithAnimation(true),
 		keyhints.WithOverlay(true),
 	)
@@ -2355,14 +2232,14 @@ func TestModel_HideHelp_Overlay_UsesSnappierSpring(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
 
 	m.HideHelp()
 
-	if !m.Animating() {
+	if m.AnimationCmd() == nil {
 		t.Error("HideHelp() with overlay and animation should start animation")
 	}
 }
@@ -2371,7 +2248,7 @@ func TestModel_Overlay_Animation_Completes(t *testing.T) {
 	bindings := []keyhints.Binding{
 		{Key: "a", Desc: "A"},
 	}
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithAnimation(true),
 		keyhints.WithOverlay(true),
 	)
@@ -2382,12 +2259,12 @@ func TestModel_Overlay_Animation_Completes(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		updated, _ := m.Update(keyhints.HeightTickMsg{})
 		m = updated.(keyhints.Model)
-		if !m.Animating() {
+		if m.AnimationCmd() == nil {
 			break
 		}
 	}
 
-	if m.Animating() {
+	if m.AnimationCmd() != nil {
 		t.Error("Overlay animation should complete after sufficient ticks")
 	}
 	if !m.ShowingHelp() {
@@ -2401,7 +2278,7 @@ func TestModel_Overlay_Animation_Completes(t *testing.T) {
 
 func TestModel_Width_ReturnsConfiguredWidth(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
-	m := keyhints.New(bindings, keyhints.WithWidth(80))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(80))
 
 	if m.Width() != 80 {
 		t.Errorf("Width() = %d, want 80", m.Width())
@@ -2410,7 +2287,7 @@ func TestModel_Width_ReturnsConfiguredWidth(t *testing.T) {
 
 func TestModel_Width_ReturnsZeroIfNotSet(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
-	m := keyhints.New(bindings)
+	m := keyhints.New(keyhints.WithBindings(bindings...))
 
 	if m.Width() != 0 {
 		t.Errorf("Width() = %d for new model without width, want 0", m.Width())
@@ -2419,7 +2296,7 @@ func TestModel_Width_ReturnsZeroIfNotSet(t *testing.T) {
 
 func TestModel_Width_UpdatedBySetWidth(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
-	m := keyhints.New(bindings, keyhints.WithWidth(60))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithWidth(60))
 
 	m.SetWidth(120)
 
@@ -2434,7 +2311,7 @@ func TestModel_Width_UpdatedBySetWidth(t *testing.T) {
 
 func TestNew_WithBorderColor(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
-	m := keyhints.New(bindings, keyhints.WithBorderColor(lipgloss.Color("#FF0000")))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithBorderColor(lipgloss.Color("#FF0000")))
 
 	// Verify model is created without error
 	view := m.View()
@@ -2446,7 +2323,7 @@ func TestNew_WithBorderColor(t *testing.T) {
 func TestNew_WithBorderColor_AdaptiveColor(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
 	color := lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"}
-	m := keyhints.New(bindings, keyhints.WithBorderColor(color))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithBorderColor(color))
 
 	// Verify model is created without error
 	view := m.View()
@@ -2461,7 +2338,7 @@ func TestNew_WithBorderColor_AdaptiveColor(t *testing.T) {
 
 func TestNew_WithBorderPadding(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
-	m := keyhints.New(bindings, keyhints.WithBorderPadding(1, 1, 2, 2))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithBorderPadding(1, 1, 2, 2))
 
 	// Verify model is created without error
 	view := m.View()
@@ -2473,7 +2350,7 @@ func TestNew_WithBorderPadding(t *testing.T) {
 func TestNew_WithBorderPadding_NegativeIgnored(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
 	// Negative values should be ignored, keeping defaults
-	m := keyhints.New(bindings,
+	m := keyhints.New(keyhints.WithBindings(bindings...),
 		keyhints.WithBorderPadding(1, 1, 1, 1),     // Set to known values
 		keyhints.WithBorderPadding(-1, -1, -1, -1), // Try to set negative - should be ignored
 	)
@@ -2488,7 +2365,7 @@ func TestNew_WithBorderPadding_NegativeIgnored(t *testing.T) {
 func TestNew_WithBorderPadding_PartialNegativeIgnored(t *testing.T) {
 	bindings := []keyhints.Binding{{Key: "a", Desc: "A"}}
 	// Mix of valid and negative values - negative should be ignored
-	m := keyhints.New(bindings, keyhints.WithBorderPadding(2, -1, 3, -1))
+	m := keyhints.New(keyhints.WithBindings(bindings...), keyhints.WithBorderPadding(2, -1, 3, -1))
 
 	// Verify model is created without error
 	view := m.View()

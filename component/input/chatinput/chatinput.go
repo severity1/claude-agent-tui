@@ -96,6 +96,25 @@ func configureTextareaStyle(s *textarea.Style, fg, muted, bg lipgloss.TerminalCo
 	s.Text = lipgloss.NewStyle().Foreground(fg).Background(bg)
 }
 
+// applyStylesToModel applies all styles from a Styles struct to a Model.
+// This is the single point of style application used by WithPalette and WithStyles.
+func applyStylesToModel(m *Model, s Styles) {
+	m.promptStyle = s.PromptStyle
+	m.focusedPromptStyle = s.FocusedPromptStyle
+	m.modeStyle = s.ModeStyle
+	m.infoStyle = s.InfoStyle
+	m.border.Style = s.Border
+	m.border.Color = s.BorderColor
+	m.border.PaddingTop = s.BorderPaddingTop
+	m.border.PaddingBottom = s.BorderPaddingBottom
+	m.flashBorderColor = s.FlashBorderColor
+	m.flashDuration = s.FlashDuration
+	m.contentBg = s.ContentBg
+	m.textMutedColor = s.TextMutedColor
+	configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+	configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+}
+
 // New creates a new ChatInput model with the given options.
 func New(opts ...Option) Model {
 	ta := textarea.New()
@@ -364,27 +383,10 @@ func WithFocusStyle(style lipgloss.Style) Option {
 // Consider using theme.GetWithDefault() for guaranteed non-nil palette.
 func WithPalette(p *theme.Palette) Option {
 	return func(m *Model) {
-		// Silent no-op for nil - allows safe chaining even when theme lookup fails.
-		// Callers should use theme.GetWithDefault() to avoid this edge case.
 		if p == nil {
 			return
 		}
-		s := StylesFromPalette(p)
-		m.promptStyle = s.PromptStyle
-		m.focusedPromptStyle = s.FocusedPromptStyle
-		m.modeStyle = s.ModeStyle
-		m.infoStyle = s.InfoStyle
-		m.border.Style = s.Border
-		m.border.Color = s.BorderColor
-		m.border.PaddingTop = s.BorderPaddingTop
-		m.border.PaddingBottom = s.BorderPaddingBottom
-		m.flashBorderColor = s.FlashBorderColor
-		m.flashDuration = s.FlashDuration
-		m.contentBg = s.ContentBg
-		m.textMutedColor = s.TextMutedColor
-		// Update textarea styles
-		configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
-		configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+		applyStylesToModel(m, StylesFromPalette(p))
 	}
 }
 
@@ -392,21 +394,7 @@ func WithPalette(p *theme.Palette) Option {
 // Use StylesFromPalette() to create a Styles from a theme, then customize individual fields.
 func WithStyles(s Styles) Option {
 	return func(m *Model) {
-		m.promptStyle = s.PromptStyle
-		m.focusedPromptStyle = s.FocusedPromptStyle
-		m.modeStyle = s.ModeStyle
-		m.infoStyle = s.InfoStyle
-		m.border.Style = s.Border
-		m.border.Color = s.BorderColor
-		m.border.PaddingTop = s.BorderPaddingTop
-		m.border.PaddingBottom = s.BorderPaddingBottom
-		m.flashBorderColor = s.FlashBorderColor
-		m.flashDuration = s.FlashDuration
-		m.contentBg = s.ContentBg
-		m.textMutedColor = s.TextMutedColor
-		// Update textarea styles
-		configureTextareaStyle(&m.textarea.BlurredStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
-		configureTextareaStyle(&m.textarea.FocusedStyle, s.TextColor, s.TextMutedColor, s.ContentBg)
+		applyStylesToModel(m, s)
 	}
 }
 

@@ -83,23 +83,20 @@ type Model struct {
 	animating        bool             // true while animation in progress
 	overlay          bool             // when true, help floats above content instead of pushing
 
-	// Inline bar styling (uses shared border package)
-	border styles.BorderConfig // consolidated border configuration for inline bar
-
-	// Centered window styling (separate config for modal appearance)
-	centerBorder styles.BorderConfig // consolidated border configuration for centered help window
+	// Border styling (uses shared border package)
+	border styles.BorderConfig // consolidated border configuration for all modes
 }
 
 // Option configures the Model.
 type Option func(*Model)
 
-// New creates a new keyhints model with the given bindings and options.
-func New(bindings []Binding, opts ...Option) Model {
+// New creates a new keyhints model with the given options.
+// Use WithBindings() to set initial bindings.
+func New(opts ...Option) Model {
 	// Use default styles
 	defaults := DefaultStyles()
 
 	m := Model{
-		bindings:       bindings,
 		separator:      " | ",
 		keyStyle:       defaults.KeyStyle,
 		descStyle:      defaults.DescStyle,
@@ -112,16 +109,13 @@ func New(bindings []Binding, opts ...Option) Model {
 		contentBg:      defaults.ContentBg,
 		helpMode:       HelpModeDown, // default: expand downward
 
-		// Inline bar defaults - use NewBorderConfig for consistent construction
+		// Border defaults - use NewBorderConfig for consistent construction
 		border: styles.NewBorderConfig(
 			styles.WithBorderLeft(true),
 			styles.WithBorderRight(false),
 			styles.WithBorderColor(defaults.BorderColor),
 			styles.WithBorderFocusColor(defaults.PrimaryColor),
 		),
-
-		// Centered window defaults (uses styles.CenterBorderConfig as base)
-		centerBorder: styles.CenterBorderConfig(),
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -183,6 +177,13 @@ func WithDefaultVisible(n int) Option {
 func WithCollapsed() Option {
 	return func(m *Model) {
 		m.expanded = false
+	}
+}
+
+// WithBindings sets the initial keybindings.
+func WithBindings(bindings ...Binding) Option {
+	return func(m *Model) {
+		m.bindings = bindings
 	}
 }
 
@@ -283,42 +284,17 @@ func WithBorderConfig(cfg styles.BorderConfig) Option {
 	}
 }
 
-// WithCenterBorderStyle sets the border style for the centered help window.
-// Default is lipgloss.NormalBorder() (from styles.CenterBorderConfig()).
-func WithCenterBorderStyle(style lipgloss.Border) Option {
-	return func(m *Model) {
-		m.centerBorder.Style = style
-	}
-}
-
-// WithCenterBorderFull enables or disables all 4 borders for the centered window.
-// When true, shows all borders; when false, shows only left border like attached modes.
-// Default is true for floating modal appearance.
-// Note: ApplyToStyleCentered always uses all 4 borders; this flag is for backward compatibility.
-func WithCenterBorderFull(enabled bool) Option {
-	return func(m *Model) {
-		m.centerBorder.Left = enabled
-		m.centerBorder.Right = enabled
-	}
-}
-
-// WithCenterPadding sets the uniform padding for the centered help window.
-// Default is 1.
-func WithCenterPadding(n int) Option {
-	return func(m *Model) {
-		m.centerBorder.PaddingTop = n
-		m.centerBorder.PaddingBottom = n
-		m.centerBorder.PaddingLeft = n
-		m.centerBorder.PaddingRight = n
-	}
-}
-
-// WithCenterBorderConfig sets the centered help window border configuration directly.
-// Use for bulk configuration when you need to set many center border properties at once.
-func WithCenterBorderConfig(cfg styles.BorderConfig) Option {
-	return func(m *Model) {
-		m.centerBorder = cfg
-	}
+// applyStylesToModel applies all styles from a Styles struct to a Model.
+// This is the single point of style application used by WithPalette and WithStyles.
+func applyStylesToModel(m *Model, s Styles) {
+	m.keyStyle = s.KeyStyle
+	m.descStyle = s.DescStyle
+	m.sepStyle = s.SepStyle
+	m.focusStyle = s.FocusStyle
+	m.helpStyle = s.HelpStyle
+	m.border.Color = s.BorderColor
+	m.border.FocusColor = s.PrimaryColor
+	m.contentBg = s.ContentBg
 }
 
 // WithPalette applies a theme palette to the component.
@@ -328,20 +304,10 @@ func WithCenterBorderConfig(cfg styles.BorderConfig) Option {
 // Consider using theme.GetWithDefault() for guaranteed non-nil palette.
 func WithPalette(p *theme.Palette) Option {
 	return func(m *Model) {
-		// Silent no-op for nil - allows safe chaining even when theme lookup fails.
-		// Callers should use theme.GetWithDefault() to avoid this edge case.
 		if p == nil {
 			return
 		}
-		s := StylesFromPalette(p)
-		m.keyStyle = s.KeyStyle
-		m.descStyle = s.DescStyle
-		m.sepStyle = s.SepStyle
-		m.focusStyle = s.FocusStyle
-		m.helpStyle = s.HelpStyle
-		m.border.Color = s.BorderColor
-		m.border.FocusColor = s.PrimaryColor
-		m.contentBg = s.ContentBg
+		applyStylesToModel(m, StylesFromPalette(p))
 	}
 }
 
@@ -349,14 +315,7 @@ func WithPalette(p *theme.Palette) Option {
 // Use StylesFromPalette() to create a Styles from a theme, then customize individual fields.
 func WithStyles(s Styles) Option {
 	return func(m *Model) {
-		m.keyStyle = s.KeyStyle
-		m.descStyle = s.DescStyle
-		m.sepStyle = s.SepStyle
-		m.focusStyle = s.FocusStyle
-		m.helpStyle = s.HelpStyle
-		m.border.Color = s.BorderColor
-		m.border.FocusColor = s.PrimaryColor
-		m.contentBg = s.ContentBg
+		applyStylesToModel(m, s)
 	}
 }
 
@@ -761,50 +720,27 @@ func (m Model) ViewHelp() string {
 }
 
 // renderHelpContent wraps content with border styling for the help window.
-// Centered mode uses center-specific config; attached modes inherit inline config.
+// Centered mode uses all-sides border styling; attached modes use inline config.
 func (m Model) renderHelpContent(content string, width int) string {
+	var style lipgloss.Style
+
 	if m.helpMode == HelpModeCenter {
-		// Centered: use center-specific config for floating modal appearance
-		// Help window always shows in focused state
-		style := m.centerBorder.ApplyToStyleCentered(lipgloss.NewStyle(), m.border.FocusColor)
+		// Centered: floating modal appearance with all-sides border
+		style = m.border.ApplyToStyleCentered(lipgloss.NewStyle(), m.border.FocusColor)
+	} else {
+		// Attached modes (Down/Up/Top): use inline border config
+		style = m.border.ApplyToStyle(lipgloss.NewStyle(), true)
 
-		// Apply background color to border/padding areas
-		if m.contentBg != nil {
-			style = style.Background(m.contentBg)
+		// Always reserve space for both borders (space characters when invisible)
+		bw := 2
+		if width > 0 {
+			style = style.Width(width - bw)
 		}
-
-		result := style.Render(content)
-
-		// Use Place() with WhitespaceBackground for consistent background fill
-		if m.contentBg != nil {
-			result = lipgloss.Place(
-				lipgloss.Width(result),
-				lipgloss.Height(result),
-				lipgloss.Left,
-				lipgloss.Top,
-				result,
-				lipgloss.WithWhitespaceBackground(m.contentBg),
-			)
-		}
-
-		return result
 	}
-
-	// Attached modes (Down/Up/Top): inherit inline config
-	// Help window always shows in focused state
-	style := m.border.ApplyToStyle(lipgloss.NewStyle(), true)
 
 	// Apply background color to border/padding areas
 	if m.contentBg != nil {
 		style = style.Background(m.contentBg)
-	}
-
-	// Always reserve space for both borders (space characters when invisible)
-	bw := 2
-
-	// Apply width for consistent full-width rendering
-	if width > 0 {
-		style = style.Width(width - bw)
 	}
 
 	result := style.Render(content)
@@ -826,6 +762,7 @@ func (m Model) renderHelpContent(content string, width int) string {
 
 // AnimationCmd returns a tick command if animation is in progress.
 // Call this after ShowHelp()/HideHelp() when using animation programmatically.
+// To check if animating: cmd := m.AnimationCmd(); isAnimating := cmd != nil
 func (m Model) AnimationCmd() tea.Cmd {
 	if m.animating {
 		return heightTick()
@@ -833,13 +770,9 @@ func (m Model) AnimationCmd() tea.Cmd {
 	return nil
 }
 
-// Animating returns whether an animation is currently in progress.
-func (m Model) Animating() bool {
-	return m.animating
-}
-
 // AnimatedHelpHeight returns the current animated height for layout calculations.
 // Returns full HelpHeight() if animation is disabled or not animating.
+// For animation padding (Up/overlay modes): padding = m.HelpHeight() - m.AnimatedHelpHeight()
 func (m Model) AnimatedHelpHeight() int {
 	if !m.animationEnabled || !m.animating {
 		if m.showHelp {
@@ -853,6 +786,7 @@ func (m Model) AnimatedHelpHeight() int {
 // ViewHelpPartial renders help window with only visibleLines visible.
 // Clips from top for HelpModeUp (bottom-anchored), from bottom for other modes (top-anchored).
 // For Up mode, returns only the last N lines - parent handles positioning padding.
+// For animated help: m.ViewHelpPartial(m.AnimatedHelpHeight())
 func (m Model) ViewHelpPartial(visibleLines int) string {
 	if visibleLines <= 0 {
 		return ""
@@ -874,27 +808,4 @@ func (m Model) ViewHelpPartial(visibleLines int) string {
 
 	// Top-anchored (Down, Top, Center): show first N lines
 	return strings.Join(lines[:visibleLines], "\n")
-}
-
-// AnimationPaddingLines returns the number of padding lines needed above
-// the help content for Up mode or overlay mode animation (bottom-anchoring).
-// Returns 0 if not animating or not in Up/overlay mode.
-func (m Model) AnimationPaddingLines() int {
-	if !m.animationEnabled || !m.animating {
-		return 0
-	}
-	// For overlay or Up mode, calculate padding for bottom-anchoring effect
-	if m.overlay || m.helpMode == HelpModeUp {
-		return m.HelpHeight() - m.AnimatedHelpHeight()
-	}
-	return 0
-}
-
-// ViewHelpAnimated returns the help content at current animated height.
-// Falls back to ViewHelp() if animation is disabled or for Center mode (no animation).
-func (m Model) ViewHelpAnimated() string {
-	if !m.animationEnabled || m.helpMode == HelpModeCenter {
-		return m.ViewHelp()
-	}
-	return m.ViewHelpPartial(m.AnimatedHelpHeight())
 }

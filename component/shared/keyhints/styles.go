@@ -30,11 +30,15 @@ type Styles struct {
 	ContentBg lipgloss.TerminalColor
 }
 
-// DefaultStyles returns the default styles for KeyHints.
-// These use neutral colors that work in most terminals.
-func DefaultStyles() Styles {
-	colors := styles.DefaultColors()
-
+// stylesFromColors creates Styles from a Colors struct.
+// This is the single source of truth for style construction.
+// The useDefaultContentBg parameter controls whether to use nil (transparent)
+// or the colors.ContentBg value for the background.
+func stylesFromColors(colors styles.Colors, useDefaultContentBg bool) Styles {
+	contentBg := colors.ContentBg
+	if useDefaultContentBg {
+		contentBg = nil // keyhints uses nil by default (transparent)
+	}
 	return Styles{
 		KeyStyle:   lipgloss.NewStyle().Bold(true).Foreground(colors.TextMuted),
 		DescStyle:  lipgloss.NewStyle().Foreground(colors.TextMuted),
@@ -47,8 +51,14 @@ func DefaultStyles() Styles {
 
 		BorderColor:  colors.Border,
 		PrimaryColor: colors.Primary,
-		ContentBg:    nil, // keyhints uses nil by default (transparent)
+		ContentBg:    contentBg,
 	}
+}
+
+// DefaultStyles returns the default styles for KeyHints.
+// These use neutral colors that work in most terminals.
+func DefaultStyles() Styles {
+	return stylesFromColors(styles.DefaultColors(), true)
 }
 
 // StylesFromPalette creates Styles from a theme Palette.
@@ -57,21 +67,5 @@ func StylesFromPalette(p *theme.Palette) Styles {
 	if p == nil {
 		return DefaultStyles()
 	}
-
-	colors := styles.ColorsFromPalette(p)
-
-	return Styles{
-		KeyStyle:   lipgloss.NewStyle().Bold(true).Foreground(colors.TextMuted),
-		DescStyle:  lipgloss.NewStyle().Foreground(colors.TextMuted),
-		SepStyle:   lipgloss.NewStyle().Faint(true).Foreground(colors.TextMuted),
-		FocusStyle: lipgloss.NewStyle().Foreground(colors.Primary),
-		HelpStyle: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colors.Border).
-			Padding(1, 2),
-
-		BorderColor:  colors.Border,
-		PrimaryColor: colors.Primary,
-		ContentBg:    colors.ContentBg,
-	}
+	return stylesFromColors(styles.ColorsFromPalette(p), false)
 }

@@ -52,11 +52,9 @@ type Styles struct {
 	BorderPaddingBottom int
 }
 
-// DefaultStyles returns the default styles for ChatInput.
-// These use neutral colors that work in most terminals.
-func DefaultStyles() Styles {
-	colors := styles.DefaultColors()
-
+// stylesFromColors creates Styles from a Colors struct.
+// This is the single source of truth for style construction.
+func stylesFromColors(colors styles.Colors) Styles {
 	return Styles{
 		PromptStyle: lipgloss.NewStyle().
 			Padding(0, 0, 0, 1).
@@ -94,48 +92,17 @@ func DefaultStyles() Styles {
 	}
 }
 
+// DefaultStyles returns the default styles for ChatInput.
+// These use neutral colors that work in most terminals.
+func DefaultStyles() Styles {
+	return stylesFromColors(styles.DefaultColors())
+}
+
 // StylesFromPalette creates Styles from a theme Palette.
 // This allows consistent theming across all components.
 func StylesFromPalette(p *theme.Palette) Styles {
 	if p == nil {
 		return DefaultStyles()
 	}
-
-	colors := styles.ColorsFromPalette(p)
-
-	return Styles{
-		PromptStyle: lipgloss.NewStyle().
-			Padding(0, 0, 0, 1).
-			Bold(true).
-			Foreground(colors.TextMuted).
-			Background(colors.ContentBg),
-		FocusedPromptStyle: lipgloss.NewStyle().
-			Padding(0, 0, 0, 1).
-			Bold(true).
-			Foreground(colors.Primary).
-			Background(colors.ContentBg),
-		ModeStyle: lipgloss.NewStyle().
-			Foreground(colors.Primary).
-			Bold(true).
-			Background(colors.ContentBg),
-		InfoStyle: lipgloss.NewStyle().
-			Foreground(colors.TextMuted).
-			Background(colors.ContentBg),
-		PlaceholderStyle: lipgloss.NewStyle().
-			Foreground(colors.TextMuted).
-			Background(colors.ContentBg),
-
-		Border:           lipgloss.ThickBorder(),
-		BorderColor:      colors.Border,
-		FlashBorderColor: colors.Primary,
-		FlashDuration:    150 * time.Millisecond,
-
-		ContentBg:      colors.ContentBg,
-		TextColor:      colors.Text,
-		TextMutedColor: colors.TextMuted,
-		PrimaryColor:   colors.Primary,
-
-		BorderPaddingTop:    1,
-		BorderPaddingBottom: 1,
-	}
+	return stylesFromColors(styles.ColorsFromPalette(p))
 }

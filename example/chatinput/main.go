@@ -108,7 +108,8 @@ func newModel() model {
 	}
 
 	// KeyHints with theme-based styling and animation enabled
-	hints := keyhints.New(bindings,
+	hints := keyhints.New(
+		keyhints.WithBindings(bindings...),
 		keyhints.WithPalette(p),
 		keyhints.WithDefaultVisible(5),
 		keyhints.WithCollapsed(),
@@ -187,7 +188,8 @@ func (m model) switchTheme(name string) model {
 	if inputWidth < 20 {
 		inputWidth = 20
 	}
-	m.hints = keyhints.New(bindings,
+	m.hints = keyhints.New(
+		keyhints.WithBindings(bindings...),
 		keyhints.WithPalette(p),
 		keyhints.WithDefaultVisible(5),
 		keyhints.WithCollapsed(),
@@ -241,7 +243,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.switchTheme(m.themeList[idx]), nil
 			}
 		case "tab":
-			if m.hints.ShowingHelp() || m.hints.Animating() {
+			if m.hints.ShowingHelp() || m.hints.AnimationCmd() != nil {
 				return m, nil
 			}
 			if m.input.Focused() {
@@ -252,7 +254,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hints.Blur()
 			return m, m.input.Focus()
 		case "esc":
-			if m.hints.ShowingHelp() || m.hints.Animating() {
+			if m.hints.ShowingHelp() || m.hints.AnimationCmd() != nil {
 				m.hints.HideHelp()
 				return m, m.hints.AnimationCmd()
 			}
@@ -492,8 +494,9 @@ func (m model) View() string {
 	baseView := lipgloss.JoinVertical(lipgloss.Left, header, mainContent)
 
 	// If overlay mode with help showing, overlay the help panel
-	if m.overlayEnabled && (m.hints.ShowingHelp() || m.hints.Animating()) {
-		helpView := m.hints.ViewHelpAnimated()
+	if m.overlayEnabled && (m.hints.ShowingHelp() || m.hints.AnimationCmd() != nil) {
+		// Inline ViewHelpAnimated: ViewHelpPartial(AnimatedHelpHeight())
+		helpView := m.hints.ViewHelpPartial(m.hints.AnimatedHelpHeight())
 
 		// Calculate container height (use terminal height or minimum)
 		containerHeight := m.height
@@ -505,8 +508,9 @@ func (m model) View() string {
 	}
 
 	// Non-overlay mode: use original push-based layout
-	if m.hints.ShowingHelp() || m.hints.Animating() {
-		helpView := m.hints.ViewHelpAnimated()
+	if m.hints.ShowingHelp() || m.hints.AnimationCmd() != nil {
+		// Inline ViewHelpAnimated: ViewHelpPartial(AnimatedHelpHeight())
+		helpView := m.hints.ViewHelpPartial(m.hints.AnimatedHelpHeight())
 		var sb strings.Builder
 		sb.WriteString(header)
 
@@ -515,7 +519,8 @@ func (m model) View() string {
 			// Like Down mode layout, but help grows upward (bottom lines first)
 			sb.WriteString(m.input.View())
 			sb.WriteString("\n\n")
-			paddingLines := m.hints.AnimationPaddingLines()
+			// Inline AnimationPaddingLines: HelpHeight() - AnimatedHelpHeight()
+			paddingLines := m.hints.HelpHeight() - m.hints.AnimatedHelpHeight()
 			if paddingLines > 0 {
 				sb.WriteString(strings.Repeat("\n", paddingLines))
 			}

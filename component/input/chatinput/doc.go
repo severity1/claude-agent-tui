@@ -21,14 +21,17 @@
 //
 // Constructor with functional options:
 //   - New(opts ...Option): Create a new ChatInput model
+//   - StylesFromPalette(p *theme.Palette) Styles: Create Styles from a theme palette
 //   - WithPlaceholder(text string): Set placeholder text
 //   - WithWidth(w int): Set initial input width
 //   - WithHeight(h int): Set initial input height
 //   - WithPrompt(prompt string): Set prompt prefix (default: empty string)
 //   - WithPromptStyle(s lipgloss.Style): Customize prompt style
+//   - WithFocusedPromptStyle(s lipgloss.Style): Customize prompt style when focused
 //   - WithMinHeight(h int): Set minimum visible lines (default: 1)
 //   - WithMaxHeight(h int): Set maximum lines before scrolling (default: 10)
 //   - WithShowCounter(show bool): Enable character/line counter display
+//   - WithLineNumbers(show bool): Show line numbers in textarea
 //   - WithHistorySize(n int): Set max history entries (default: 100)
 //   - WithMode(mode string): Set mode indicator (e.g., "Build", "Shell")
 //   - WithModeStyle(s lipgloss.Style): Customize mode indicator style
@@ -36,12 +39,18 @@
 //   - WithInfoStyle(s lipgloss.Style): Customize info bar style
 //
 // Visual styling options:
-//   - WithContentBackground(color lipgloss.Color): Set content background (default: style.Surface)
+//   - WithContentBackground(color): Set content background (default: style.Surface)
 //   - WithBorderStyle(border lipgloss.Border): Set border style (default: ThickBorder)
-//   - WithBorderColor(color lipgloss.Color): Set border color (default: style.Border)
-//   - WithFlashBorderColor(color lipgloss.Color): Set flash border color (default: style.Primary)
+//   - WithBorderLeft(enabled bool): Set left border visibility
+//   - WithBorderRight(enabled bool): Set right border visibility
+//   - WithBorderColor(color): Set border color (default: style.Border)
+//   - WithFlashBorderColor(color): Set flash border color (default: style.Primary)
 //   - WithFlashDuration(d time.Duration): Set flash animation duration (default: 150ms)
-//   - WithBorderPadding(top, bottom int): Set internal border padding (default: 1, 1)
+//   - WithBorderPadding(top, bottom, left, right int): Set internal border padding
+//   - WithBorderConfig(cfg styles.BorderConfig): Set border configuration directly
+//   - WithFocusStyle(style lipgloss.Style): Set focus indicator style
+//   - WithPalette(p *theme.Palette): Apply theme palette
+//   - WithStyles(s Styles): Set custom styles
 //
 // Focus management:
 //   - Focus(): Set focus and return cursor blink command

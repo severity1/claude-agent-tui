@@ -28,6 +28,11 @@
 //	p := theme.Get(theme.Dracula)  // constants provide autocomplete
 //	input := chatinput.New(chatinput.WithPalette(p))
 //
+// Get a theme with fallback to default (guaranteed non-nil):
+//
+//	p := theme.GetWithDefault(userConfig.Theme)
+//	input := chatinput.New(chatinput.WithPalette(p))
+//
 // Get the default theme name:
 //
 //	name := theme.DefaultName()  // returns "catppuccin"
@@ -58,9 +63,9 @@
 //
 // Register a custom theme:
 //
-//	theme.Register("custom", theme.Palette{
+//	theme.Register("mytheme", theme.Palette{
 //	    Primary: lipgloss.AdaptiveColor{Light: "#000", Dark: "#fff"},
-//	    // ... all 45 fields
+//	    // ... all 50 fields
 //	})
 //
 // # Component Integration

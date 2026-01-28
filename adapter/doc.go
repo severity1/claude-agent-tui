@@ -6,10 +6,9 @@
 //
 // # Files
 //
-// The package consists of three main files:
+// The package consists of two main files:
 //
 //   - stream.go: StreamCmd converts SDK ReceiveMessages channel to tea.Msg
-//   - control.go: ToolControlAdapter handles canUseTool callbacks
 //   - client.go: ClientAdapter manages SDK client lifecycle
 //
 // # Stream Messages
@@ -39,7 +38,6 @@
 // ClientAdapter manages SDK client lifecycle with Bubble Tea commands:
 //
 //   - NewClientAdapter(): Create adapter with SDK options
-//   - SetProgram(): Set Bubble Tea program for message sending
 //   - ConnectCmd(): Establish SDK connection
 //   - QueryCmd(): Send query and start streaming
 //   - InterruptCmd(): Cancel ongoing stream
@@ -55,10 +53,11 @@
 //   - ClientStateStreaming: Query active, messages flowing
 //   - ClientStateError: Error occurred (check Error field)
 //
-// # Control Messages (Planned - control.go)
+// # Future Enhancements
 //
-// ToolControlAdapter will intercept canUseTool callbacks and emit:
+// The following features are planned but not yet implemented:
 //
+// ToolControlAdapter (control.go) - Will intercept canUseTool callbacks and emit:
 //   - ShowPermissionPromptMsg: Tool permission request
 //   - ShowQuestionPromptMsg: AskUserQuestion tool
 //   - ShowPlanEnterPromptMsg: EnterPlanMode tool

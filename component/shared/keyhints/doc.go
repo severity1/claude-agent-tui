@@ -15,7 +15,8 @@
 // # API
 //
 // Constructor with functional options:
-//   - New(bindings []Binding, opts ...Option): Create a new keyhints model
+//   - New(opts ...Option): Create a new keyhints model
+//   - WithBindings(bindings ...Binding): Set initial keybindings
 //   - WithSeparator(sep string): Set separator between hints (default " | ")
 //   - WithKeyStyle(style lipgloss.Style): Set style for key names
 //   - WithDescStyle(style lipgloss.Style): Set style for descriptions
@@ -23,9 +24,23 @@
 //   - WithWidth(w int): Set maximum display width
 //   - WithDefaultVisible(n int): Set number of hints shown when collapsed
 //   - WithCollapsed(): Start in collapsed state
+//   - WithReservedBindings(bindings ...Binding): Bindings always shown at end
 //   - WithFocusStyle(style lipgloss.Style): Set style for focus indicator
 //   - WithHelpStyle(style lipgloss.Style): Set style for help window border
+//   - WithHelpMode(mode HelpMode): Help window positioning (HelpModeDown, HelpModeUp, HelpModeCenter, HelpModeTop)
+//   - WithContentBackground(color): Set background color for help window
 //   - WithPadding(padding string): Set left padding for inline views (default 1 space)
+//   - WithBorderStyle(style lipgloss.Border): Set border style
+//   - WithBorderLeft(enabled bool): Set left border visibility
+//   - WithBorderRight(enabled bool): Set right border visibility
+//   - WithBorderPadding(top, bottom, left, right int): Set border padding
+//   - WithBorderColor(color): Set border color
+//   - WithBorderConfig(cfg styles.BorderConfig): Set border configuration directly
+//   - WithPalette(p *theme.Palette): Apply theme palette
+//   - WithStyles(s Styles): Set custom styles
+//   - WithAnimation(enabled bool): Toggle help window animation
+//   - WithOverlay(overlay bool): Float help window above content
+//   - WithAnimationSpring(frequency, damping float64): Configure spring animation
 //
 // Binding management:
 //   - SetBindings(bindings []Binding): Replace all bindings
