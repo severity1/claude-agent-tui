@@ -175,9 +175,9 @@ func TestBinding_UsedInSwitch(t *testing.T) {
 	newline := keybind.New("Alt+Enter", "Newline", "alt+enter", "ctrl+j")
 
 	tests := []struct {
-		name    string
-		msg     tea.KeyMsg
-		want    string
+		name string
+		msg  tea.KeyMsg
+		want string
 	}{
 		{"Enter submits", tea.KeyMsg{Type: tea.KeyEnter}, "submit"},
 		{"Esc clears", tea.KeyMsg{Type: tea.KeyEsc}, "clear"},

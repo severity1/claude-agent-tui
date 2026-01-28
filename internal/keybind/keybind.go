@@ -2,6 +2,7 @@ package keybind
 
 import (
 	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Binding wraps key.Binding with display text and description.
@@ -26,4 +27,10 @@ func New(display, desc string, keys ...string) Binding {
 		Display: display,
 		Desc:    desc,
 	}
+}
+
+// Matches returns true if the given key message matches this binding.
+// This is a convenience wrapper around key.Matches().
+func (b Binding) Matches(msg tea.KeyMsg) bool {
+	return key.Matches(msg, b.Binding)
 }
