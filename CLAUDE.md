@@ -10,7 +10,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 - **Module**: `github.com/severity1/claude-agent-tui`
 - **Go Version**: 1.24+
 - **Core Dependencies**: Bubble Tea, Lip Gloss, Bubbles, claude-agent-sdk-go
-- **Status**: Stream adapter and streamtext component implemented, additional components in planning phase
+- **Status**: Stream adapter, streamtext (output), and chatinput (input) components implemented; layout components in planning phase
 
 <!-- END AUTO-MANAGED -->
 
@@ -64,7 +64,12 @@ claude-agent-tui/
 │   └── doc.go                    # Package documentation
 │
 ├── component/                    # TUI components
-│   ├── input/                    # Input components (planned)
+│   ├── input/                    # Input components
+│   │   └── chatinput/            # Chat input with history and clipboard
+│   │       ├── chatinput.go      # Component implementation
+│   │       ├── chatinput_test.go # Comprehensive tests
+│   │       ├── styles.go         # Styles struct and palette integration
+│   │       └── doc.go            # Package documentation
 │   └── output/                   # Display components
 │       └── streamtext/           # Streaming text with cursor
 │           ├── streamtext.go     # Component implementation
@@ -247,6 +252,18 @@ Message events: `message_start`, `message_delta`, `message_stop`
 - Only `StreamDoneMsg` and `StreamErrorMsg` should NOT return `StreamCmd` (they signal end of stream)
 - Pattern: `case adapter.XxxMsg: /* handle */ return m, adapter.StreamCmd(m.ctx, m.msgChan)`
 - See `example/client/main.go` for comprehensive implementation with both streaming and complete message types
+
+### ChatInput Component Pattern
+- **Key-event-controlled**: Unlike method-controlled display components, chatinput processes `tea.KeyMsg` in `Update()` directly
+- **Submit flow**: Enter emits `SubmitMsg{Text, AutoAccept, PlanMode}`; Alt+Enter / Ctrl+J inserts newline; Esc clears input
+- **History navigation**: Up/Down arrows navigate history buffer (size 100 by default); draft saved when entering history, restored on exit
+- **Clipboard**: Ctrl+Y or Ctrl+Shift+C triggers `CopyCmd()` using OSC 52 escape sequences; works over SSH/tmux/Wayland; emits `CopiedMsg{Text, Err}`
+- **Flash animation**: Border flashes `flashBorderColor` for `flashDuration` (default 150ms) on copy; respects `REDUCE_MOTION` env var via `accessibility.ReduceMotion()`
+- **Auto-expanding height**: `Height()` clamps `LineCount()` between `minHeight` (default 1) and `maxHeight` (default 10); `View()` intentionally mutates textarea height for this
+- **Custom placeholder**: Rendered manually (not via bubbles textarea) to work around a bug where the first placeholder line does not fill the background
+- **Info bar layout**: `[indent][Mode] [InfoBar]  ...spacing...  [Counter]`; indent width matches prompt width for alignment
+- **Responsive sizing**: Implements `SetSize(width, height int)` pattern; parent handles `tea.WindowSizeMsg` and calls `SetWidth()`
+- **Focus state**: Embeds `focus.State`; `Focus()` and `Blur()` override to also delegate to the internal textarea
 
 ### VHS Visual Regression Testing Pattern
 - **Location**: Tape files co-located with examples (`example/<component>/<component>.tape`)
