@@ -555,8 +555,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, m.handleSubmit()
 
 	case msg.Type == tea.KeyEnter && msg.Alt, msg.Type == tea.KeyCtrlJ:
-		m.textarea.SetValue(m.textarea.Value() + "\n")
-		return true, nil
+		var cmd tea.Cmd
+		m.textarea, cmd = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		return true, cmd
 
 	case msg.Type == tea.KeyEsc:
 		m.textarea.SetValue("")

@@ -200,6 +200,27 @@ func TestModel_Update_CtrlJ_InsertsNewline(t *testing.T) {
 	}
 }
 
+func TestChatInput_Newline_AtCursorPosition(t *testing.T) {
+	m := chatinput.New()
+	m.Focus()
+	m.SetValue("helloworld")
+
+	// Move cursor left 5 times to position between "hello" and "world"
+	for range 5 {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+		m = updated.(chatinput.Model)
+	}
+
+	// Press Alt+Enter to insert newline at cursor
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	model := updated.(chatinput.Model)
+
+	value := model.Value()
+	if value != "hello\nworld" {
+		t.Errorf("Value() = %q after Alt+Enter mid-text, want %q", value, "hello\nworld")
+	}
+}
+
 func TestChatInput_Clear(t *testing.T) {
 	m := chatinput.New()
 	m.Focus()
