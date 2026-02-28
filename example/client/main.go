@@ -211,7 +211,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			m.cancel()
 			if m.client.State() != adapter.ClientStateDisconnected {
-				m.client.DisconnectCmd()()
+				if msg := m.client.DisconnectCmd()(); msg != nil {
+					if sm, ok := msg.(adapter.ClientStateMsg); ok && sm.Error != nil {
+						m.addLog("Disconnect error: %v", sm.Error)
+					}
+				}
 			}
 			return m, tea.Quit
 

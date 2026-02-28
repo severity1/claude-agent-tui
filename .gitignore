@@ -15,8 +15,10 @@ coverage.html
 
 # Built binaries
 /chat
+/chatinput
 /client
 /example/chat/chat
+/example/chatinput/chatinput
 /example/client/client
 
 # IDE

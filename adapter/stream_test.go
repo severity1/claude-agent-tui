@@ -248,15 +248,22 @@ func TestStreamCmd_ContextCancellation_ReturnsStreamErrorMsg(t *testing.T) {
 	}
 }
 
-func TestStreamCmd_NilChannel_ReturnsStreamDoneMsg(t *testing.T) {
+func TestStreamCmd_NilChannel_ReturnsStreamErrorMsg(t *testing.T) {
 	ctx := context.Background()
 
 	cmd := adapter.StreamCmd(ctx, nil)
 	result := cmd()
 
-	_, ok := result.(adapter.StreamDoneMsg)
+	errMsg, ok := result.(adapter.StreamErrorMsg)
 	if !ok {
-		t.Fatalf("expected StreamDoneMsg for nil channel, got %T", result)
+		t.Fatalf("expected StreamErrorMsg for nil channel, got %T", result)
+	}
+
+	if errMsg.Err == nil {
+		t.Error("expected non-nil error in StreamErrorMsg")
+	}
+	if errMsg.Err.Error() != "StreamCmd called with nil channel" {
+		t.Errorf("Err = %q, want %q", errMsg.Err.Error(), "StreamCmd called with nil channel")
 	}
 }
 
@@ -839,9 +846,9 @@ func TestAdaptMessage_StreamEvent_MissingIndex(t *testing.T) {
 		t.Fatalf("expected StreamBlockStopMsg, got %T", result)
 	}
 
-	// Should default to 0
-	if msg.Index != 0 {
-		t.Errorf("Index = %d, want 0 for missing index", msg.Index)
+	// Should return -1 for missing index to distinguish from index 0
+	if msg.Index != -1 {
+		t.Errorf("Index = %d, want -1 for missing index", msg.Index)
 	}
 }
 
@@ -1053,6 +1060,33 @@ func TestAdaptMessage_SystemMessage_Nil(t *testing.T) {
 	}
 	if unknownMsg.TypeName != "SystemMessage/nil" {
 		t.Errorf("TypeName = %q, want %q", unknownMsg.TypeName, "SystemMessage/nil")
+	}
+}
+
+func TestAdaptMessage_SystemMessage_Init_MixedToolTypes(t *testing.T) {
+	// Test toStringSlice with non-string items in tools array
+	sysMsg := &claudecode.SystemMessage{
+		Subtype: "init",
+		Data: map[string]any{
+			"session_id": "sess-mixed",
+			"tools":      []any{"Bash", 123, "Read", nil, "Write", true},
+		},
+	}
+
+	result := adapter.AdaptMessage(sysMsg)
+
+	msg, ok := result.(adapter.SystemInitMsg)
+	if !ok {
+		t.Fatalf("expected SystemInitMsg, got %T", result)
+	}
+
+	// Should only have 3 valid string tools
+	if len(msg.Tools) != 3 {
+		t.Errorf("Tools len = %d, want 3 (only strings)", len(msg.Tools))
+	}
+	// Should report 3 skipped items (123, nil, true)
+	if msg.SkippedToolCount != 3 {
+		t.Errorf("SkippedToolCount = %d, want 3", msg.SkippedToolCount)
 	}
 }
 

@@ -232,32 +232,6 @@ func TestNewClientAdapter_WithOptions(t *testing.T) {
 }
 
 // ============================================================================
-// SetProgram Tests
-// ============================================================================
-
-func TestClientAdapter_SetProgram_StoresProgram(t *testing.T) {
-	ca := adapter.NewClientAdapter()
-
-	// We can't easily test this without a real program, but we can verify
-	// the method doesn't panic
-	ca.SetProgram(nil)
-	// If we get here without panic, the method works
-}
-
-func TestClientAdapter_SetProgram_NilSafe(t *testing.T) {
-	ca := adapter.NewClientAdapter()
-
-	// Should not panic with nil
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("SetProgram(nil) panicked: %v", r)
-		}
-	}()
-
-	ca.SetProgram(nil)
-}
-
-// ============================================================================
 // State Tests
 // ============================================================================
 
@@ -498,6 +472,36 @@ func TestClientAdapter_QueryCmd_Failure(t *testing.T) {
 
 	if stateMsg.State != adapter.ClientStateError {
 		t.Errorf("State = %v, want %v", stateMsg.State, adapter.ClientStateError)
+	}
+}
+
+func TestClientAdapter_QueryCmd_RejectsWhileStreaming(t *testing.T) {
+	mock := newMockClient()
+	ca := adapter.NewClientAdapterWithClient(mock)
+
+	// Connect and start a query
+	ca.ConnectCmd()()
+	ca.QueryCmd("First query")()
+
+	// State should be Streaming
+	if ca.State() != adapter.ClientStateStreaming {
+		t.Fatalf("State = %v, want %v", ca.State(), adapter.ClientStateStreaming)
+	}
+
+	// Second query should be rejected while streaming
+	cmd := ca.QueryCmd("Second query")
+	result := cmd()
+
+	stateMsg, ok := result.(adapter.ClientStateMsg)
+	if !ok {
+		t.Fatalf("expected ClientStateMsg, got %T", result)
+	}
+
+	if stateMsg.State != adapter.ClientStateError {
+		t.Errorf("State = %v, want %v (should reject query while streaming)", stateMsg.State, adapter.ClientStateError)
+	}
+	if stateMsg.Error == nil {
+		t.Error("Error should not be nil when rejecting query during streaming")
 	}
 }
 

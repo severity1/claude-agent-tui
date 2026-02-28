@@ -49,7 +49,6 @@ type ClientStateMsg struct {
 // It provides tea.Cmd methods for connection lifecycle management.
 type ClientAdapter struct {
 	client  claudecode.Client
-	program *tea.Program
 	msgChan <-chan claudecode.Message
 	state   ClientState
 	ctx     context.Context
@@ -77,14 +76,6 @@ func NewClientAdapterWithClient(client claudecode.Client, opts ...claudecode.Opt
 	}
 }
 
-// SetProgram sets the Bubble Tea program for sending messages.
-// This should be called after the program is created but before connecting.
-func (c *ClientAdapter) SetProgram(p *tea.Program) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.program = p
-}
-
 // State returns the current connection state.
 // This method is thread-safe.
 func (c *ClientAdapter) State() ClientState {
@@ -93,7 +84,8 @@ func (c *ClientAdapter) State() ClientState {
 	return c.state
 }
 
-// setState updates the internal state (must be called with lock held or within command).
+// setState updates the internal state. This method acquires its own lock
+// and should only be called from command functions (outside the main lock).
 func (c *ClientAdapter) setState(state ClientState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -141,7 +133,7 @@ func (c *ClientAdapter) ConnectCmdWithContext(ctx context.Context) tea.Cmd {
 }
 
 // QueryCmd returns a tea.Cmd that sends a query to the SDK.
-// The adapter must be connected before calling this method.
+// The adapter must be connected (not streaming) before calling this method.
 // It emits ClientStateMsg upon completion and stores the message channel.
 func (c *ClientAdapter) QueryCmd(prompt string) tea.Cmd {
 	return func() tea.Msg {
@@ -151,24 +143,12 @@ func (c *ClientAdapter) QueryCmd(prompt string) tea.Cmd {
 		ctx := c.ctx
 		c.mu.RUnlock()
 
-		// Must be connected to query
-		if state != ClientStateConnected && state != ClientStateStreaming {
+		// Must be connected (and not streaming) to query
+		if state != ClientStateConnected {
 			return ClientStateMsg{
 				State: ClientStateError,
 				Error: fmt.Errorf("cannot query: client not connected (state: %s)", state),
 			}
-		}
-
-		if client == nil {
-			return ClientStateMsg{
-				State: ClientStateError,
-				Error: fmt.Errorf("cannot query: client is nil"),
-			}
-		}
-
-		// Use background context if no context set
-		if ctx == nil {
-			ctx = context.Background()
 		}
 
 		// Send the query
@@ -210,18 +190,6 @@ func (c *ClientAdapter) InterruptCmd() tea.Cmd {
 		// Not streaming - no-op, return current state
 		if state != ClientStateStreaming {
 			return ClientStateMsg{State: state}
-		}
-
-		if client == nil {
-			return ClientStateMsg{
-				State: ClientStateError,
-				Error: fmt.Errorf("cannot interrupt: client is nil"),
-			}
-		}
-
-		// Use background context if no context set
-		if ctx == nil {
-			ctx = context.Background()
 		}
 
 		// Send interrupt signal

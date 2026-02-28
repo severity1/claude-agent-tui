@@ -43,6 +43,10 @@ go run example/chat/main.go --validate  # Validate all adapter message types
 go run example/streamtext/main.go  # StreamText component demo (r=restart, q=quit)
 go run example/client/main.go      # ClientAdapter lifecycle demo (simulated mode)
 go run example/client/main.go --live  # ClientAdapter with real Claude CLI connection
+
+# VHS visual regression testing
+make vhs-record                   # Generate component screenshots
+make vhs-validate                 # Validate tape file syntax
 ```
 
 <!-- END AUTO-MANAGED -->
@@ -243,6 +247,15 @@ Message events: `message_start`, `message_delta`, `message_stop`
 - Only `StreamDoneMsg` and `StreamErrorMsg` should NOT return `StreamCmd` (they signal end of stream)
 - Pattern: `case adapter.XxxMsg: /* handle */ return m, adapter.StreamCmd(m.ctx, m.msgChan)`
 - See `example/client/main.go` for comprehensive implementation with both streaming and complete message types
+
+### VHS Visual Regression Testing Pattern
+- **Location**: Tape files co-located with examples (`example/<component>/<component>.tape`)
+- **Screenshots**: Stored in `example/<component>/screenshots/` directory
+- **Naming**: Screenshots numbered sequentially (`01-initial-state.png`, etc.)
+- **Terminal config**: Fixed 800x600 size, consistent theme for reproducibility
+- **Verification**: Agent-based visual comparison (not pixel-perfect diffing)
+- **Newline input**: Use `Ctrl+J` instead of `Alt+Enter` for VHS compatibility
+- **Makefile targets**: `vhs-record` (generate), `vhs-validate` (syntax check)
 
 <!-- END AUTO-MANAGED -->
 

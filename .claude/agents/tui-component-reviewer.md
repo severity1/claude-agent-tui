@@ -202,6 +202,10 @@ ACCESSIBILITY:
 - Focus Indicators: [OK/ISSUE/N/A]
 - Color Independence: [OK/ISSUE]
 
+VISUAL REGRESSION:
+- VHS Tape: [OK/MISSING]
+- Screenshots: [OK/MISSING/OUTDATED]
+
 POSITIVE OBSERVATIONS:
 - [Good patterns observed]
 
@@ -212,6 +216,21 @@ COMPONENT SCORE: X/10
 - Focus Management: X/10 (if applicable)
 - Accessibility: X/10
 ```
+
+### PHASE 6: Visual Regression Artifacts
+
+For input/interface components, verify:
+
+#### VHS Tape File
+- [ ] Tape exists at `example/<component>/<component>.tape`
+- [ ] Tape covers key interactions (initial, typing, submit, navigation, focus, help)
+- [ ] Terminal size is fixed (800x600) for reproducibility
+- [ ] Screenshots numbered sequentially
+
+#### Screenshot Directory
+- [ ] Screenshots exist in `example/<component>/screenshots/`
+- [ ] All documented interaction states covered
+- [ ] Run `make vhs-record` if component View() changed
 
 ## Reference Documents
 

@@ -82,29 +82,30 @@ The library uses a layered architecture:
 
 ### Input Components
 
-| Component | SDK Trigger | Purpose | Variants |
-|-----------|-------------|---------|----------|
-| `ChatInput` | Default | Main input with mode toggles | - |
-| `Permission` | canUseTool | Tool approval (Allow/Deny/Always) | Modal, Overlay, Inline |
-| `Question` | AskUserQuestion | Multi-choice question response | Modal, Overlay, View |
-| `PlanEnter` | EnterPlanMode | Confirm entering plan mode | Modal, Overlay |
-| `PlanExit` | ExitPlanMode | Review plan and decide action | Modal, Fullscreen, Window |
-| `Todo` | TodoWrite | Task list display | View, Sidebar, Collapsible |
-| `Interrupt` | Ctrl+C | Stop confirmation | Modal, Overlay |
-| `Confirm` | Generic | Yes/no prompt | Modal, Inline |
-| `FilePicker` | File selection | File browser dialog | Modal, Overlay, Window |
-| `TaskManager` | TaskOutput/KillShell | Background task management | Sidebar, Overlay, Modal |
-| `Session` | Session control | Session picker and management | Modal, Overlay, Sidebar |
-| `Search` | Message search | Search message history | Overlay, Modal, Inline |
+| Component | SDK Trigger | Purpose | Variants | Status |
+|-----------|-------------|---------|----------|--------|
+| `ChatInput` | Default | Main input with history, clipboard | - | Implemented |
+| `Permission` | canUseTool | Tool approval (Allow/Deny/Always) | Modal, Overlay, Inline | Planned |
+| `Question` | AskUserQuestion | Multi-choice question response | Modal, Overlay, View | Planned |
+| `PlanEnter` | EnterPlanMode | Confirm entering plan mode | Modal, Overlay | Planned |
+| `PlanExit` | ExitPlanMode | Review plan and decide action | Modal, Fullscreen, Window | Planned |
+| `Todo` | TodoWrite | Task list display | View, Sidebar, Collapsible | Planned |
+| `Interrupt` | Ctrl+C | Stop confirmation | Modal, Overlay | Planned |
+| `Confirm` | Generic | Yes/no prompt | Modal, Inline | Planned |
+| `FilePicker` | File selection | File browser dialog | Modal, Overlay, Window | Planned |
+| `TaskManager` | TaskOutput/KillShell | Background task management | Sidebar, Overlay, Modal | Planned |
+| `Session` | Session control | Session picker and management | Modal, Overlay, Sidebar | Planned |
+| `Search` | Message search | Search message history | Overlay, Modal, Inline | Planned |
 
 ### Shared Components
 
-| Component | Purpose |
-|-----------|---------|
-| `Button` | Clickable button with states |
-| `Chip` | Toggle pill/chip |
-| `Card` | Container with border |
-| `Overlay` | Modal backdrop wrapper |
+| Component | Purpose | Status |
+|-----------|---------|--------|
+| `KeyHints` | Inline keybinding hints with help window | Implemented |
+| `Button` | Clickable button with states | Planned |
+| `Chip` | Toggle pill/chip | Planned |
+| `Card` | Container with border | Planned |
+| `Overlay` | Modal backdrop wrapper | Planned |
 
 ## Themes (Planned)
 
@@ -382,6 +383,8 @@ data, _ := mgr.Export(sessionID, session.ExportMarkdown)
 |-----------|--------|-------|
 | **Stream Adapter** | Implemented | Converts SDK messages to Bubble Tea messages |
 | **Validation Example** | Implemented | Demonstrates all 16+ message types |
+| **KeyHints** | Implemented | Inline hints with modal help window |
+| **ChatInput** | Implemented | Text input with history and clipboard |
 | **Control Adapter** | Planned | Tool permission callbacks |
 | **Client Adapter** | Planned | SDK client lifecycle |
 | **TUI Components** | Planned | See component tables above |
